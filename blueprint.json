@@ -1,0 +1,34 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"meta": {
+		"title": "Block Doctor demo",
+		"author": "aryanjasala"
+	},
+	"landingPage": "/wp-admin/tools.php?page=block-doctor",
+	"preferredVersions": {
+		"php": "8.3",
+		"wp": "latest"
+	},
+	"features": {
+		"networking": true
+	},
+	"login": true,
+	"steps": [
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "git:directory",
+				"url": "https://github.com/aryanjasala/block-doctor",
+				"ref": "main"
+			},
+			"options": {
+				"activate": true,
+				"targetFolderName": "block-doctor"
+			}
+		},
+		{
+			"step": "runPHP",
+			"code": "<?php require_once '/wordpress/wp-load.php'; kses_remove_filters(); $p = function ( $t ) { return \"<!-- wp:paragraph -->\\n<p>$t</p>\\n<!-- /wp:paragraph -->\"; }; $posts = array( 'Opening hours' => $p( 'Come and visit.' ) . \"\\n\\n<!-- wp:heading {\\\"level\\\":3} -->\\n<h2 class=\\\"wp-block-heading\\\">Opening hours</h2>\\n<!-- /wp:heading -->\\n\\n<!-- wp:image -->\\n<div class=\\\"wp-block-image\\\"><img src=\\\"https://s.w.org/images/core/emoji/15.0.3/svg/1f950.svg\\\" alt=\\\"\\\"/></div>\\n<!-- /wp:image -->\", 'Order online' => $p( 'Order ahead and skip the queue.' ) . \"\\n\\n<!-- wp:acme/widget {\\\"color\\\":\\\"red\\\"} -->\\n<div class=\\\"acme-widget\\\">Order online</div>\\n<!-- /wp:acme/widget -->\", 'About the bakery' => '<p>We bake <strong>sourdough</strong> every morning.</p>', 'Our story' => \"<!-- wp:heading -->\\n<h2>Our story</h2>\\n<!-- /wp:heading -->\\n\\n\" . $p( 'It started with one oven.' ), 'Footer links' => \"<!-- wp:block {\\\"ref\\\":99999} /-->\\n\\n<!-- wp:navigation {\\\"ref\\\":99998} /-->\", 'Seasonal menu' => \"<!-- wp:group -->\\n<div class=\\\"wp-block-group\\\">\" . $p( 'Inside a group' ) . \"\\n\\n<!-- wp:heading {\\\"level\\\":4} -->\\n<h2 class=\\\"wp-block-heading\\\">Wrong level inside</h2>\\n<!-- /wp:heading --></div>\\n<!-- /wp:group -->\" ); foreach ( $posts as $title => $content ) { wp_insert_post( wp_slash( array( 'post_title' => $title, 'post_content' => $content, 'post_status' => 'publish' ) ) ); }"
+		}
+	]
+}

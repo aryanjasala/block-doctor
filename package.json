@@ -1,0 +1,20 @@
+{
+  "name": "block-doctor",
+  "private": true,
+  "description": "Scan the whole site for broken and invalid blocks and fix them in bulk, with undo.",
+  "license": "GPL-2.0-or-later",
+  "scripts": {
+    "env:start": "docker compose -f tests/e2e/env/docker-compose.yml up -d",
+    "env:stop": "docker compose -f tests/e2e/env/docker-compose.yml down -v",
+    "test:e2e": "playwright test",
+    "screenshots": "SCREENSHOTS=1 playwright test screenshots",
+    "demo": "DEMO=1 playwright test demo",
+    "test:unit:js": "node --test tests/js/"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
