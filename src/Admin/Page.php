@@ -92,6 +92,9 @@ final class Page implements Service {
 	 * Loads the scripts on this screen only.
 	 */
 	public function load(): void {
+		// Core loads the editor scripts of blocks registered from block.json only on block editor screens.
+		// Without them, a plugin's working blocks would show here as unregistered.
+		add_filter( 'should_load_block_editor_scripts_and_styles', '__return_true' );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 	}
 
@@ -110,12 +113,22 @@ final class Page implements Service {
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core's own hook, fired so third-party blocks register.
 		do_action( 'enqueue_block_editor_assets' );
 
+		// The scripts that register each block in the editor, as the post editor loads them, even when
+		// another plugin turns should_load_block_editor_scripts_and_styles off again.
+		foreach ( \WP_Block_Type_Registry::get_instance()->get_all_registered() as $type ) {
+			foreach ( array_merge( (array) $type->editor_script_handles, (array) $type->script_handles ) as $handle ) {
+				if ( '' !== $handle ) {
+					wp_enqueue_script( $handle );
+				}
+			}
+		}
+
 		$url = plugins_url( 'assets/', PLUGIN_FILE );
 		wp_register_script( 'block-doctor-core', $url . 'js/doctor.js', array(), VERSION, true );
 		wp_enqueue_script(
 			'block-doctor-admin',
 			$url . 'js/admin.js',
-			array( 'block-doctor-core', 'wp-api-fetch', 'wp-block-library', 'wp-block-serialization-default-parser', 'wp-blocks', 'wp-components', 'wp-dom-ready', 'wp-element', 'wp-hooks', 'wp-i18n', 'wp-url' ),
+			array( 'block-doctor-core', 'wp-api-fetch', 'wp-block-library', 'wp-block-serialization-default-parser', 'wp-blocks', 'wp-components', 'wp-date', 'wp-dom-ready', 'wp-element', 'wp-hooks', 'wp-i18n', 'wp-url' ),
 			VERSION,
 			true
 		);
@@ -132,8 +145,9 @@ final class Page implements Service {
 	public function data(): array {
 		$default    = $this->config->fix_strategy( '' );
 		$strategies = array();
-		foreach ( array_keys( \WP_Block_Type_Registry::get_instance()->get_all_registered() ) as $name ) {
-			$strategy = $this->config->fix_strategy( (string) $name );
+		$registered = array_map( 'strval', array_keys( \WP_Block_Type_Registry::get_instance()->get_all_registered() ) );
+		foreach ( $registered as $name ) {
+			$strategy = $this->config->fix_strategy( $name );
 			if ( $strategy !== $default ) {
 				$strategies[ $name ] = $strategy;
 			}
@@ -146,15 +160,19 @@ final class Page implements Service {
 		}
 
 		return array(
-			'batchSize'  => $this->config->batch_size(),
-			'undoDays'   => $this->config->undo_days(),
-			'kinds'      => $this->report->kinds(),
-			'summary'    => $this->report->summary(),
-			'strategy'   => $default,
-			'strategies' => (object) $strategies,
-			'postTypes'  => $types,
+			'batchSize'    => $this->config->batch_size(),
+			'undoDays'     => $this->config->undo_days(),
+			'kinds'        => $this->report->kinds(),
+			'summary'      => $this->report->summary(),
+			'strategy'     => $default,
+			'strategies'   => (object) $strategies,
+			'postTypes'    => $types,
+			// Block types registered in PHP. The scan never reports these as unregistered, even when their editor script does not load here.
+			'serverBlocks' => $registered,
+			// PHP date format for wp.date.dateI18n(), which also uses the site's time zone.
+			'dateFormat'   => $this->config->date_format(),
 			// Not wp_nonce_url(): it escapes & for HTML, and this goes to JavaScript.
-			'exportUrl'  => add_query_arg(
+			'exportUrl'    => add_query_arg(
 				array(
 					'action'   => self::EXPORT,
 					'_wpnonce' => wp_create_nonce( self::EXPORT ),

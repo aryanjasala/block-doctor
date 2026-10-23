@@ -95,7 +95,7 @@ final class Report {
 	 * @return string[]
 	 */
 	public static function columns(): array {
-		return array( 'post_id', 'title', 'post_type', 'status', 'kind', 'block', 'path', 'message', 'source', 'changed_since_scan', 'scanned', 'edit_link' );
+		return array( 'post_id', 'title', 'post_type', 'status', 'kind', 'block', 'path', 'message', 'detail', 'excerpt', 'source', 'changed_since_scan', 'scanned', 'edit_link' );
 	}
 
 	/**
@@ -115,6 +115,8 @@ final class Report {
 			'block'              => $issue['name'],
 			'path'               => implode( '.', $issue['path'] ),
 			'message'            => $issue['message'],
+			'detail'             => $issue['detail'] ?? '',
+			'excerpt'            => $issue['excerpt'] ?? '',
 			'source'             => $issue['source'] ?? 'server',
 			'changed_since_scan' => $row['stale'] ? 'yes' : 'no',
 			'scanned'            => gmdate( 'Y-m-d H:i:s', (int) $row['scanned'] ),

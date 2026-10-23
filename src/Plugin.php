@@ -109,7 +109,7 @@ final class Plugin {
 		$this->config  = new Config();
 		$this->posts   = new Posts( $this->config );
 		$this->issues  = new Issues( $this->config );
-		$this->scanner = new Scanner( $this->config, $this->posts, $this->issues, new Checks() );
+		$this->scanner = new Scanner( $this->config, $this->posts, $this->issues, new Checks( $this->config ) );
 		$this->batches = new Batches( $this->config );
 		$this->fixer   = new Fixer( $this->posts, $this->issues, $this->batches, $this->scanner );
 		$this->report  = new Report( $this->config, $this->issues, $this->scanner );

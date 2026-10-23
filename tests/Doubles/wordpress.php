@@ -36,6 +36,9 @@ if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
 		/** @var string[] */
 		public static $names = array();
 
+		/** @var array<string, string[]> Editor script handles by block name. */
+		public static $editor_scripts = array();
+
 		/** @var WP_Block_Type_Registry|null */
 		private static $instance;
 
@@ -48,7 +51,15 @@ if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
 		}
 
 		public function get_all_registered() {
-			return array_fill_keys( self::$names, true );
+			$types = array();
+			foreach ( self::$names as $name ) {
+				$types[ $name ] = (object) array(
+					'name'                  => $name,
+					'editor_script_handles' => self::$editor_scripts[ $name ] ?? array(),
+					'script_handles'        => array(),
+				);
+			}
+			return $types;
 		}
 	}
 }

@@ -36,6 +36,22 @@ final class Checks {
 	);
 
 	/**
+	 * Defaults, for the date format of messages.
+	 *
+	 * @var Config
+	 */
+	private Config $config;
+
+	/**
+	 * Sets up the checks.
+	 *
+	 * @param Config|null $config Defaults.
+	 */
+	public function __construct( ?Config $config = null ) {
+		$this->config = $config ?? new Config();
+	}
+
+	/**
 	 * Every check, by name.
 	 *
 	 * @return array<string, callable> Each takes ( WP_Post $post, array $blocks ) and returns a list of issues.
@@ -74,10 +90,19 @@ final class Checks {
 		$blocks = parse_blocks( $post->post_content );
 		$issues = array();
 
-		foreach ( $this->all() as $check ) {
+		foreach ( $this->all() as $name => $check ) {
 			try {
 				$found = call_user_func( $check, $post, $blocks );
 			} catch ( \Throwable $error ) {
+				// Say so, instead of storing the post as clean.
+				$issues[] = array(
+					'kind'    => 'error',
+					'path'    => array( 0 ),
+					'name'    => '',
+					/* translators: %s: name of the check, such as missing-media. */
+					'message' => sprintf( __( 'The %s check stopped with an error, so this post was not fully checked.', 'block-doctor' ), (string) $name ),
+					'detail'  => $error->getMessage(),
+				);
 				continue;
 			}
 			foreach ( (array) $found as $issue ) {
@@ -115,6 +140,7 @@ final class Checks {
 					'name'    => $name,
 					/* translators: %s: block name, such as acme/widget. */
 					'message' => sprintf( __( 'Block type %s is not registered. Its plugin may be inactive or deleted.', 'block-doctor' ), $name ),
+					'excerpt' => self::excerpt( (string) $block['innerHTML'] ),
 				);
 				// The editor keeps an unregistered block whole, with whatever is inside it.
 				return false;
@@ -183,7 +209,7 @@ final class Checks {
 					'message' => sprintf(
 						/* translators: 1: date, 2: number of blocks. */
 						_n( 'The post is empty, but the revision from %1$s had %2$s block.', 'The post is empty, but the revision from %1$s had %2$s blocks.', $count, 'block-doctor' ),
-						mysql2date( 'Y-m-d H:i', $revision->post_date ),
+						mysql2date( $this->config->date_format(), $revision->post_date ),
 						number_format_i18n( $count )
 					),
 				),
@@ -245,7 +271,7 @@ final class Checks {
 				if ( isset( self::MEDIA[ $name ] ) ) {
 					$id = (int) ( $block['attrs'][ self::MEDIA[ $name ] ] ?? 0 );
 					if ( $id > 0 ) {
-						$found[] = array( $id, $path, $name );
+						$found[] = array( $id, $path, $name, self::excerpt( (string) $block['innerHTML'] ) );
 					}
 				}
 				return true;
@@ -257,7 +283,7 @@ final class Checks {
 		}
 
 		$issues = array();
-		foreach ( $found as list( $id, $path, $name ) ) {
+		foreach ( $found as list( $id, $path, $name, $excerpt ) ) {
 			$attachment = get_post( $id );
 			if ( $attachment && 'attachment' === $attachment->post_type && 'trash' !== $attachment->post_status ) {
 				continue;
@@ -266,6 +292,7 @@ final class Checks {
 				'kind'    => 'missing-media',
 				'path'    => $path,
 				'name'    => $name,
+				'excerpt' => $excerpt,
 				/* translators: %d: attachment ID. */
 				'message' => sprintf( __( 'Attachment #%d was deleted from the Media Library. The block may still show a copy of the file, or a broken one.', 'block-doctor' ), $id ),
 			);

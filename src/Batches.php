@@ -40,7 +40,7 @@ final class Batches {
 	}
 
 	/**
-	 * Every batch still inside the undo window, newest first.
+	 * Every batch still inside the undo window that fixed at least one post, newest first.
 	 *
 	 * @return array<int, array>
 	 */
@@ -48,7 +48,13 @@ final class Batches {
 		$data = $this->data();
 		krsort( $data['items'] );
 
-		return $data['items'];
+		// A batch that saved nothing, say because every save was refused, has nothing to undo.
+		return array_filter(
+			$data['items'],
+			static function ( array $batch ): bool {
+				return ! empty( $batch['posts'] );
+			}
+		);
 	}
 
 	/**

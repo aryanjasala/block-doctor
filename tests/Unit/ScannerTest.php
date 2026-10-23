@@ -94,6 +94,97 @@ final class ScannerTest extends PluginTestCase {
 		$this->assertGreaterThan( 0, $state['finished'] );
 	}
 
+	public function test_a_batch_of_results_writes_the_index_once_not_once_per_post(): void {
+		$scanner = $this->plugin()['scanner'];
+		$results = array();
+		for ( $i = 1; $i <= 20; $i++ ) {
+			$post      = $this->add_post( 'post ' . $i );
+			$results[] = array(
+				'id'     => $post->ID,
+				'hash'   => md5( $post->post_content ),
+				'issues' => array( self::invalid() ),
+			);
+		}
+		$scanner->start_browser( array() );
+		$writes = $this->count_index_writes();
+
+		$state = $scanner->record( 20, 20, $results, false );
+
+		$this->assertSame( 1, $writes(), 'one write of block_doctor_index for the batch' );
+		$this->assertSame( 20, $state['found'] );
+		$this->assertCount( 20, $this->options[ Issues::INDEX ] );
+	}
+
+	public function test_a_server_batch_writes_the_index_once(): void {
+		$scanner = $this->plugin()['scanner'];
+		$posts   = array();
+		for ( $i = 1; $i <= 5; $i++ ) {
+			$posts[] = $this->add_post( 'classic ' . $i );
+		}
+		\WP_Query::$queue = array( array( 'posts' => $posts ) );
+		$scanner->begin_server();
+		$writes = $this->count_index_writes();
+
+		$batch = $scanner->server_batch();
+
+		$this->assertSame( 1, $writes() );
+		$this->assertCount( 5, $batch['found'] );
+		$this->assertCount( 5, $this->options[ Issues::INDEX ] );
+	}
+
+	public function test_deleting_many_posts_writes_the_index_once_when_the_request_ends(): void {
+		$issues = $this->plugin()['issues'];
+		$ids    = array();
+		foreach ( range( 1, 4 ) as $i ) {
+			$post  = $this->add_post( 'classic ' . $i );
+			$ids[] = $post->ID;
+			$issues->save( $post, array( 'server' => array( self::invalid() ) ), 'h' );
+		}
+		$writes = $this->count_index_writes();
+
+		foreach ( $ids as $id ) {
+			$issues->forget( $id );
+		}
+		$this->assertSame( 0, $writes(), 'nothing written while the request runs' );
+		$this->assertSame( array(), $issues->index(), 'but the index already reads without them' );
+		$this->assertNotFalse( has_action( 'shutdown', array( $issues, 'commit' ) ) );
+
+		$issues->commit();
+		$this->assertSame( 1, $writes() );
+		$this->assertArrayNotHasKey( Issues::INDEX, $this->options, 'an empty index is deleted' );
+	}
+
+	/**
+	 * Counts update_option() calls for the index from now on.
+	 *
+	 * @return callable(): int
+	 */
+	private function count_index_writes(): callable {
+		$count = 0;
+		Functions\when( 'update_option' )->alias(
+			function ( $name, $value ) use ( &$count ) {
+				if ( Issues::INDEX === $name ) {
+					++$count;
+				}
+				$this->options[ $name ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'delete_option' )->alias(
+			function ( $name ) use ( &$count ) {
+				if ( Issues::INDEX === $name ) {
+					++$count;
+				}
+				unset( $this->options[ $name ] );
+				return true;
+			}
+		);
+
+		return static function () use ( &$count ): int {
+			return $count;
+		};
+	}
+
 	public function test_pause_and_resume_only_touch_a_scan_in_progress(): void {
 		$scanner = $this->plugin()['scanner'];
 		$this->assertSame( 'idle', $scanner->pause_browser( true )['status'] );

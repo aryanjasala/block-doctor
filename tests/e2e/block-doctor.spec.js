@@ -1,7 +1,7 @@
 // End-to-end tests for Block Doctor. Every test checks the database through WP-CLI as well as the screen.
 const { test, expect, wp, wpEval, openEditor } = require( './utils' );
 const { BASE_URL } = require( './utils/config' );
-const { MARKUP, createPost, content, issues, option, revisions, reset, seed } = require( './seed' );
+const { MARKUP, createPost, content, issues, option, revisions, installShelfBlocks, installIndexCounter, indexWrites, reset, seed } = require( './seed' );
 
 const SCREEN = '/wp-admin/tools.php?page=block-doctor';
 const version = () => wp( 'core', 'version' );
@@ -58,10 +58,10 @@ test.describe.serial( 'Block Doctor', () => {
 	test( 'the browser scan finds every kind of issue and stores it per post', async ( { page } ) => {
 		await scanSite( page );
 
-		// On screen: one tab per kind with its count.
+		// On screen: one filter per kind with how many posts have it.
 		const tab = ( kind ) => page.locator( `.bdr-tab[data-kind="${ kind }"] .bdr-count` );
 		await expect( tab( 'all' ) ).toHaveText( '9' );
-		await expect( tab( 'invalid' ) ).toHaveText( '5' );
+		await expect( tab( 'invalid' ) ).toHaveText( '4' );
 		await expect( tab( 'missing' ) ).toHaveText( '1' );
 		await expect( tab( 'classic' ) ).toHaveText( '1' );
 		await expect( tab( 'deprecated' ) ).toHaveText( '1' );
@@ -69,7 +69,8 @@ test.describe.serial( 'Block Doctor', () => {
 		await expect( tab( 'pattern-ref' ) ).toHaveText( '1' );
 		await expect( tab( 'navigation-ref' ) ).toHaveText( '1' );
 		await expect( tab( 'missing-media' ) ).toHaveText( '1' );
-		await expect( row( page, ids.hours ) ).toContainText( 'Expected tag name `h3`, instead saw `h2`.' );
+		await expect( row( page, ids.hours ) ).toContainText( 'The saved markup no longer matches what the block produces.' );
+		await expect( row( page, ids.hours ).locator( '.bdr-detail-text' ).first() ).toHaveText( 'Expected tag name h3, instead saw h2.' );
 		await expect( row( page, ids.order ) ).toContainText( 'Block type acme/widget is not registered.' );
 
 		// In the database: each post's issues, with the block path.
@@ -306,7 +307,7 @@ test.describe.serial( 'Block Doctor', () => {
 		const [ download ] = await Promise.all( [ page.waitForEvent( 'download' ), page.locator( '.bdr-export' ).click() ] );
 		const csv = require( 'fs' ).readFileSync( await download.path(), 'utf8' );
 		const lines = csv.trim().split( '\r\n' );
-		expect( lines[ 0 ] ).toBe( '"post_id","title","post_type","status","kind","block","path","message","source","changed_since_scan","scanned","edit_link"' );
+		expect( lines[ 0 ] ).toBe( '"post_id","title","post_type","status","kind","block","path","message","detail","excerpt","source","changed_since_scan","scanned","edit_link"' );
 		expect( lines ).toHaveLength( 13 );
 		expect( csv ).toContain( `"${ ids.order }","Order online","post","publish","missing","acme/widget","1"` );
 
@@ -389,6 +390,198 @@ test.describe.serial( 'Block Doctor', () => {
 
 		const missing = await rest( 'DELETE', `${ run }/undo-batch/run?input[batch_id]=999` );
 		expect( missing.status ).toBeGreaterThanOrEqual( 400 );
+	} );
+
+	test( 'plugin blocks registered from block.json, and blocks registered only in PHP, are never reported as unregistered', async ( { page } ) => {
+		installShelfBlocks();
+		const shelf = createPost( 'Top shelf', '<!-- wp:acme/shelf -->\n<div class="acme-shelf"><p>Top shelf</p></div>\n<!-- /wp:acme/shelf -->' );
+		// Saved by an older version of the block, with a class it no longer adds.
+		const oldShelf = createPost( 'Old shelf', '<!-- wp:acme/shelf -->\n<div class="acme-shelf acme-shelf--wide"><p>Old shelf</p></div>\n<!-- /wp:acme/shelf -->' );
+		const clock = createPost( 'Opening clock', '<!-- wp:acme/clock {"format":"24h"} /-->\n\n' + MARKUP.paragraph( 'Come in.' ) );
+
+		await scanSite( page );
+
+		// The block's editor script loaded on the screen, so the block registered there too.
+		expect( await page.evaluate( () => !! window.wp.blocks.getBlockType( 'acme/shelf' ) ) ).toBe( true );
+		expect( issues( shelf ) ).toEqual( [] );
+		// And its markup is really checked: the old one is invalid, not unregistered.
+		expect( issues( oldShelf ) ).toEqual( [ 'invalid@0' ] );
+		// Registered in PHP with no editor script: never unregistered.
+		expect( issues( clock ) ).toEqual( [] );
+		expect( issues( ids.order ) ).toEqual( [ 'missing@1' ], 'a block nothing registers is still reported' );
+		await expect( page.locator( '.bdr-tab[data-kind="missing"] .bdr-count' ) ).toHaveText( '1' );
+	} );
+
+	test( 'Convert to Custom HTML never empties a dynamic block, and says why it stays', async ( { page } ) => {
+		const dynamic = '<!-- wp:acme/plugin-shots {"ids":[4,5]} /-->';
+		const mixed = createPost( 'Restore Blocks from Revisions', [ MARKUP.paragraph( 'Screenshots below.' ), dynamic, MARKUP.widget ].join( '\n\n' ) );
+		const only = createPost( 'Screenshots only', dynamic );
+		await scanSite( page );
+		expect( issues( mixed ) ).toEqual( [ 'missing@1', 'missing@2' ] );
+
+		await page.locator( '.bdr-tab[data-kind="missing"]' ).click();
+		await page.locator( '.bdr-fix-kind' ).click();
+		await expect( page.locator( '.bdr-preview-count' ) ).toContainText( '2 of 3 posts change.' );
+		await expect( page.locator( '.bdr-preview-count' ) ).toContainText( '2 blocks stay as they are' );
+		const kept = page.locator( `.bdr-preview-item[data-post="${ only }"] .bdr-kept` );
+		await expect( kept ).toContainText( 'acme/plugin-shots' );
+		await expect( kept ).toContainText( 'It has no saved HTML' );
+		// The conversion drops the block's settings, so its diff is open straight away.
+		await expect( page.locator( `.bdr-preview-item[data-post="${ mixed }"] .bdr-diff` ) ).toBeVisible();
+
+		await page.locator( '.bdr-apply' ).click();
+		await expect( page.locator( '.bdr-modal .components-notice' ) ).toContainText( 'Fixed 2 posts' );
+		await page.locator( '.bdr-close' ).click();
+
+		expect( content( mixed ) ).toBe( [ MARKUP.paragraph( 'Screenshots below.' ), dynamic, '<!-- wp:html -->\n<div class="acme-widget">Order online</div>\n<!-- /wp:html -->' ].join( '\n\n' ) );
+		expect( content( only ) ).toBe( dynamic );
+		expect( content( mixed ) ).not.toContain( '<!-- wp:html /-->' );
+		expect( issues( mixed ) ).toEqual( [ 'missing@1' ] );
+	} );
+
+	test( 'a refused save shows only the error and keeps the preview, so the fixes can be applied later', async ( { page } ) => {
+		await scanSite( page );
+		await row( page, ids.hours ).locator( 'input[type="checkbox"]' ).check();
+		await page.locator( '.bdr-fix-selected' ).click();
+		const locked = { status: 423, contentType: 'application/json', body: JSON.stringify( { code: 'site_frozen', message: 'The site is read-only right now.', data: { status: 423 } } ) };
+
+		// The batch itself is refused, like during a site freeze.
+		await page.route( /block-doctor(\/|%2F)v1(\/|%2F)batches(\?|&|$)/, ( route ) => ( route.request().method() === 'POST' ? route.fulfill( locked ) : route.continue() ) );
+		await page.locator( '.bdr-apply' ).click();
+		await expect( page.locator( '.bdr-modal .components-notice.is-error' ) ).toContainText( 'The site is read-only right now.' );
+		await expect( page.locator( '.bdr-modal .components-notice.is-success' ) ).toHaveCount( 0 );
+		await expect( page.locator( '.bdr-modal' ) ).not.toContainText( 'Fixed 0' );
+		await expect( page.locator( '.bdr-apply' ) ).toBeEnabled();
+		await page.unroute( /block-doctor(\/|%2F)v1(\/|%2F)batches(\?|&|$)/ );
+
+		// Every save is refused.
+		await page.route( /block-doctor(\/|%2F)v1(\/|%2F)fix/, ( route ) => route.fulfill( locked ) );
+		await page.locator( '.bdr-apply' ).click();
+		await expect( page.locator( '.bdr-modal .components-notice.is-error' ) ).toContainText( 'The site is read-only right now.' );
+		await expect( page.locator( '.bdr-modal .components-notice.is-success' ) ).toHaveCount( 0 );
+		await expect( page.locator( '.bdr-apply' ) ).toBeEnabled();
+		expect( content( ids.hours ) ).toContain( MARKUP.badHeading );
+		await page.unroute( /block-doctor(\/|%2F)v1(\/|%2F)fix/ );
+
+		// Later it works, from the same preview.
+		await page.locator( '.bdr-apply' ).click();
+		await expect( page.locator( '.bdr-modal .components-notice.is-success' ) ).toContainText( 'Fixed 1 post' );
+		await expect( page.locator( '.bdr-modal .components-notice.is-error' ) ).toHaveCount( 0 );
+		await page.locator( '.bdr-close' ).click();
+		expect( content( ids.hours ) ).toContain( MARKUP.goodHeading );
+		// The batch that saved nothing is not offered for undo.
+		const batches = JSON.parse( wp( 'block-doctor', 'batches', '--format=json' ) );
+		expect( batches.map( ( batch ) => batch.posts ) ).toEqual( [ 1 ] );
+		await expect( page.locator( '.bdr-batches tbody tr' ) ).toHaveCount( 1 );
+	} );
+
+	test( 'dates use the site format and time zone, not the browser', async ( { page } ) => {
+		const saved = { date_format: wp( 'option', 'get', 'date_format' ), time_format: wp( 'option', 'get', 'time_format' ), timezone_string: wp( 'option', 'get', 'timezone_string' ) };
+		try {
+			wp( 'option', 'update', 'date_format', 'Y-m-d' );
+			wp( 'option', 'update', 'time_format', 'H:i' );
+			wp( 'option', 'update', 'timezone_string', 'Pacific/Kiritimati' );
+			await scanSite( page );
+			const finished = wpEval( "echo wp_date( 'Y-m-d H:i', get_option( 'block_doctor_scan' )['finished'] );" );
+			await expect( page.locator( '.bdr-last-scan' ) ).toContainText( `Last scan: ${ finished },` );
+
+			await fixSelected( page, [ ids.hours ] );
+			const time = wpEval( "$b = get_option( 'block_doctor_batches' ); echo wp_date( 'Y-m-d H:i', $b['items'][1]['time'] );" );
+			await expect( page.locator( '.bdr-batches tr[data-batch="1"] td' ).nth( 1 ) ).toHaveText( time );
+		} finally {
+			for ( const [ name, value ] of Object.entries( saved ) ) {
+				wp( 'option', 'update', name, value );
+			}
+		}
+	} );
+
+	test( 'the report speaks plainly: labels, block titles, grouped issues, sentence case and filter buttons', async ( { page } ) => {
+		const logs = [];
+		page.on( 'console', ( message ) => logs.push( message.text() ) );
+		const outdated = createPost( 'History', [ 1, 2, 3, 4, 5 ].map( ( n ) => `<!-- wp:heading -->\n<h2>Chapter ${ n }</h2>\n<!-- /wp:heading -->` ).join( '\n\n' ) );
+		const secret = createPost( 'Staff rota', MARKUP.badHeading, { post_status: 'private' } );
+		await scanSite( page );
+
+		// Status labels, not slugs.
+		await expect( row( page, ids.hours ).locator( '.bdr-meta' ) ).toHaveText( 'Post · Published' );
+		await expect( row( page, secret ).locator( '.bdr-meta' ) ).toHaveText( 'Post · Private' );
+
+		// The block title, with the name second, its first words and where it is.
+		const hours = row( page, ids.hours );
+		await expect( hours.locator( '.bdr-block' ).first() ).toHaveText( 'Heading' );
+		await expect( hours.locator( '.bdr-slug' ).first() ).toHaveText( 'core/heading' );
+		await expect( hours.locator( '.bdr-excerpt' ).first() ).toHaveText( '“Opening hours”' );
+		await expect( hours.locator( '.bdr-position' ).first() ).toHaveText( 'block 2 from the top' );
+		await expect( row( page, ids.nested ).locator( '.bdr-position' ) ).toHaveText( 'block 2 inside block 1' );
+		// A plain message; the validation message with its code is a click away, without backticks.
+		expect( await hours.locator( '.bdr-message' ).first().innerText() ).toBe( 'The saved markup no longer matches what the block produces.' );
+		await expect( hours.locator( '.bdr-detail-text' ).first() ).toBeHidden();
+		await hours.locator( '.bdr-detail summary' ).first().click();
+		await expect( hours.locator( '.bdr-detail-text code' ).first() ).toHaveText( 'h3' );
+		expect( await hours.innerText() ).not.toContain( '`' );
+
+		// One group per kind: the count, the titles, the shared message once, and the blocks folded away.
+		const group = row( page, outdated ).locator( '.bdr-group[data-kind="deprecated"]' );
+		await expect( group.locator( '.bdr-group-summary' ) ).toHaveText( '5 blocks: Heading ×5' );
+		await expect( group.locator( '.bdr-message' ) ).toHaveCount( 1 );
+		await expect( group.locator( '.bdr-group-more summary' ) ).toHaveText( 'Show all 5' );
+		await expect( group.locator( '.bdr-issue' ).first() ).toBeHidden();
+
+		// Filter buttons, not tabs, each counting posts.
+		await expect( page.locator( '.bdr-tabs' ) ).toHaveAttribute( 'role', 'group' );
+		await expect( page.locator( '[role="tab"], [role="tablist"]' ) ).toHaveCount( 0 );
+		const invalid = page.locator( '.bdr-tab[data-kind="invalid"]' );
+		await expect( invalid ).toHaveAttribute( 'aria-pressed', 'false' );
+		await expect( invalid.locator( '.bdr-count' ) ).toHaveText( '5' );
+		await invalid.click();
+		await expect( invalid ).toHaveAttribute( 'aria-pressed', 'true' );
+		await expect( page.locator( '.bdr-tab[data-kind="all"]' ) ).toHaveAttribute( 'aria-pressed', 'false' );
+		await expect( page.locator( '.bdr-kind-description' ) ).toContainText( '6 blocks in 5 posts.' );
+
+		// Sentence case, like the rest of wp-admin.
+		expect( await page.locator( '.bdr-badge' ).first().evaluate( ( node ) => getComputedStyle( node ).textTransform ) ).toBe( 'none' );
+		expect( await page.locator( '.bdr-missing-option label' ).first().evaluate( ( node ) => getComputedStyle( node ).textTransform ) ).toBe( 'none' );
+
+		// The preview's per-block choice uses the title too, and no select warns about its old size.
+		await row( page, ids.hours ).locator( 'input[type="checkbox"]' ).check();
+		await page.locator( '.bdr-fix-selected' ).click();
+		await expect( page.locator( '.bdr-strategy' ).first() ).toContainText( 'Heading, 1 block' );
+		expect( logs.filter( ( text ) => /36px default size|__next40pxDefaultSize/.test( text ) ) ).toEqual( [] );
+	} );
+
+	test( 'a post the scan cannot read is reported as not checked, not stored as clean', async ( { page } ) => {
+		const broken = createPost( 'Broken widget', '<!-- wp:acme/boom -->\n<div class="boom" data-x="1">Boom</div>\n<!-- /wp:acme/boom -->' );
+		await page.goto( SCREEN );
+		// A block type whose attribute selector makes the editor's parser throw.
+		await page.evaluate( () =>
+			window.wp.blocks.registerBlockType( 'acme/boom', {
+				title: 'Boom',
+				category: 'text',
+				attributes: { x: { type: 'string', source: 'attribute', selector: '[[[', attribute: 'data-x' } },
+				edit: () => null,
+				save: () => null,
+			} )
+		);
+		await page.locator( '.bdr-start' ).click();
+		await expect( page.locator( '.bdr-last-scan' ) ).toBeVisible( { timeout: 30_000 } );
+
+		expect( issues( broken ) ).toEqual( [ 'error@0' ] );
+		await expect( page.locator( '.bdr-tab[data-kind="error"]' ) ).toContainText( 'Not checked' );
+		await expect( row( page, broken ) ).toContainText( 'The scan could not read the blocks of this post, so they were not checked.' );
+		expect( issues( ids.hours ) ).toEqual( [ 'invalid@1', 'invalid@2' ], 'the other posts are checked as usual' );
+	} );
+
+	test( 'the results index is written once per batch of posts, not once per post', async ( { page } ) => {
+		installIndexCounter();
+		await scanSite( page );
+		expect( Object.keys( option( 'block_doctor_index' ) ) ).toHaveLength( 9 );
+		expect( indexWrites() ).toBe( 1 );
+
+		// Deleting several posts with issues in one request writes it once too.
+		installIndexCounter();
+		wp( 'post', 'delete', String( ids.hours ), String( ids.order ), String( ids.classic ), '--force' );
+		expect( indexWrites() ).toBe( 1 );
+		expect( Object.keys( option( 'block_doctor_index' ) ) ).toHaveLength( 6 );
 	} );
 
 	test( 'people without the capability cannot open the screen or call the routes', async ( { browser } ) => {

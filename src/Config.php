@@ -185,6 +185,22 @@ final class Config {
 	}
 
 	/**
+	 * How dates and times show on the screen, from the site's settings.
+	 *
+	 * @return string A PHP date format, as wp_date() takes it.
+	 */
+	public function date_format(): string {
+		$default = trim( (string) get_option( 'date_format', 'F j, Y' ) . ' ' . (string) get_option( 'time_format', 'g:i a' ) );
+
+		/**
+		 * Filters the date and time format of Block Doctor's screen, its messages and the "Last scan" line.
+		 *
+		 * @param string $format Default the site's date format and time format from Settings > General.
+		 */
+		return self::text( apply_filters( 'block_doctor_date_format', $default ), '' !== $default ? $default : 'F j, Y g:i a' );
+	}
+
+	/**
 	 * Issue kinds the report knows, with labels.
 	 *
 	 * @return array<string, array{label: string, description: string, fix: string, broken: bool}>
@@ -193,7 +209,7 @@ final class Config {
 		$kinds = array(
 			'invalid'        => array(
 				'label'       => __( 'Invalid', 'block-doctor' ),
-				'description' => __( 'The saved markup does not match what the block saves now. The editor shows "This block contains unexpected or invalid content."', 'block-doctor' ),
+				'description' => __( 'The saved markup no longer matches what the block produces. The editor shows "This block contains unexpected or invalid content."', 'block-doctor' ),
 				'fix'         => 'browser',
 				'broken'      => true,
 			),
@@ -238,6 +254,12 @@ final class Config {
 				'description' => __( 'An image, cover, video, audio, file or media and text block points to an attachment that was deleted.', 'block-doctor' ),
 				'fix'         => '',
 				'broken'      => true,
+			),
+			'error'          => array(
+				'label'       => __( 'Not checked', 'block-doctor' ),
+				'description' => __( 'The scan hit an error in this post, so its blocks were not checked. Open it in the editor to see what is wrong.', 'block-doctor' ),
+				'fix'         => '',
+				'broken'      => false,
 			),
 		);
 

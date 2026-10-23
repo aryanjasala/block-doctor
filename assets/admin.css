@@ -164,14 +164,81 @@
 	font-size: 12px;
 }
 
+.bdr-group-summary {
+	font-weight: 600;
+}
+
+.bdr-group-items {
+	margin: 4px 0 0;
+}
+
+.bdr-group-items .bdr-issue {
+	margin: 0 0 4px;
+}
+
+.bdr-group-more summary,
+.bdr-detail summary {
+	color: #2271b1;
+	cursor: pointer;
+	margin-top: 2px;
+}
+
+.bdr-block {
+	font-weight: 600;
+	margin-right: 4px;
+}
+
+.bdr-slug {
+	color: #50575e;
+	margin-right: 4px;
+}
+
+.bdr-excerpt {
+	margin-right: 4px;
+}
+
 .bdr-position {
-	color: #646970;
+	color: #50575e;
+}
+
+.bdr-position::before {
+	content: "· ";
+}
+
+.bdr-issue > .bdr-position:first-child::before {
+	content: none;
 }
 
 .bdr-message {
 	color: #3c434a;
 	display: block;
 	margin-top: 2px;
+}
+
+.bdr-detail-text {
+	color: #50575e;
+	display: block;
+	font-size: 12px;
+	margin-top: 2px;
+	overflow-wrap: anywhere;
+}
+
+.bdr-kept {
+	color: #50575e;
+	margin: 6px 0 0;
+}
+
+.bdr-kept code {
+	margin: 0 4px;
+}
+
+/* Sentence case labels, like the rest of wp-admin. The components style them uppercase with a tripled class, so match that and one more. */
+.bdr-wrap .components-base-control .components-input-control__label.components-input-control__label,
+.bdr-modal .components-base-control .components-input-control__label.components-input-control__label,
+.bdr-wrap .components-base-control .components-base-control__label.components-base-control__label,
+.bdr-modal .components-base-control .components-base-control__label.components-base-control__label {
+	font-size: 13px;
+	text-transform: none;
 }
 
 .bdr-badge {
@@ -184,8 +251,6 @@
 	line-height: 18px;
 	margin-right: 4px;
 	padding: 0 6px;
-	text-transform: uppercase;
-	letter-spacing: 0.02em;
 }
 
 .bdr-badge-invalid {
@@ -211,7 +276,8 @@
 .bdr-badge-empty,
 .bdr-badge-pattern-ref,
 .bdr-badge-navigation-ref,
-.bdr-badge-missing-media {
+.bdr-badge-missing-media,
+.bdr-badge-error {
 	background: #fef1e7;
 	color: #7a3b00;
 }
@@ -248,9 +314,15 @@
 	margin: 0 0 4px;
 }
 
+.bdr-strategy-list {
+	display: grid;
+	gap: 12px 20px;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	margin-top: 8px;
+}
+
 .bdr-strategy {
-	margin: 8px 0 0;
-	max-width: 420px;
+	margin: 0;
 }
 
 .bdr-preview-list {

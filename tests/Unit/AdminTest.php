@@ -76,7 +76,19 @@ final class AdminTest extends PluginTestCase {
 		$this->assertSame( 'https://example.com/wp-admin/tools.php?page=block-doctor', Page::url() );
 	}
 
+	public function test_the_screen_counts_as_a_block_editor_screen_so_core_loads_every_block_editor_script(): void {
+		$plugin = $this->plugin();
+		$page   = new Page( $plugin['config'], $plugin['report'] );
+		$page->load();
+
+		$this->assertNotFalse( has_filter( 'should_load_block_editor_scripts_and_styles', '__return_true' ) );
+		$this->assertNotFalse( has_action( 'admin_enqueue_scripts', array( $page, 'enqueue' ) ) );
+	}
+
 	public function test_the_screen_loads_the_block_editor_scripts_and_fires_the_editor_assets_hook(): void {
+		// A plugin block registered from block.json, with its editor script.
+		\WP_Block_Type_Registry::$names[]                     = 'acme/shelf';
+		\WP_Block_Type_Registry::$editor_scripts['acme/shelf'] = array( 'acme-shelf-editor-script' );
 		$plugin  = $this->plugin();
 		$page    = new Page( $plugin['config'], $plugin['report'] );
 		$queued  = array();
@@ -105,7 +117,7 @@ final class AdminTest extends PluginTestCase {
 		Actions\expectDone( 'enqueue_block_editor_assets' )->once();
 		$page->enqueue();
 
-		$this->assertSame( array( 'wp-blocks', 'wp-block-library', 'wp-format-library', 'wp-block-editor', 'block-doctor-admin' ), $queued );
+		$this->assertSame( array( 'wp-blocks', 'wp-block-library', 'wp-format-library', 'wp-block-editor', 'acme-shelf-editor-script', 'block-doctor-admin' ), $queued );
 		$this->assertStringContainsString( 'wp-blocks: wp.blocks.unstable__bootstrapServerSideBlockDefinitions(', $inline[0] );
 		$this->assertStringContainsString( 'block-doctor-admin: window.blockDoctorData = ', $inline[2] );
 	}
@@ -128,6 +140,8 @@ final class AdminTest extends PluginTestCase {
 
 		$this->assertSame( 'recover', $data['strategy'] );
 		$this->assertEquals( (object) array( 'acme/slider' => 'html' ), $data['strategies'] );
+		$this->assertSame( array( 'core/paragraph', 'acme/slider' ), $data['serverBlocks'], 'the scan never calls these unregistered' );
+		$this->assertSame( 'Y-m-d Y-m-d', $data['dateFormat'], 'the site\'s date and time format, not the browser\'s' );
 		$this->assertSame( 20, $data['batchSize'] );
 		$this->assertSame( 'Post', $data['postTypes']['post'] );
 		$this->assertSame( 'https://example.com/wp-admin/admin-post.php?action=block_doctor_export&_wpnonce=abc123', $data['exportUrl'] );

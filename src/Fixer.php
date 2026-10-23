@@ -101,6 +101,11 @@ final class Fixer {
 			);
 		}
 
+		// A Custom HTML block with nothing in it is a block deleted, not repaired: dynamic blocks have no saved HTML to keep.
+		if ( self::empty_html_blocks( $content ) > self::empty_html_blocks( (string) $post->post_content ) ) {
+			return new \WP_Error( 'block_doctor_empty_html', __( 'The fix would leave an empty Custom HTML block where a block was, so it was not saved. Leave that block as it is.', 'block-doctor' ), array( 'status' => 422 ) );
+		}
+
 		if ( $content === $post->post_content ) {
 			return array(
 				'post_id'  => (int) $post->ID,
@@ -186,13 +191,18 @@ final class Fixer {
 
 		$now  = $limit > 0 ? array_slice( $todo, 0, $limit ) : $todo;
 		$rest = array_slice( $todo, count( $now ) );
-		foreach ( $now as $post_id ) {
-			$reason = $this->restore( (int) $post_id, $batch_id );
-			if ( '' === $reason ) {
-				$batch['restored'][] = (int) $post_id;
-			} else {
-				$batch['skipped'][ (int) $post_id ] = $reason;
+		$this->issues->begin();
+		try {
+			foreach ( $now as $post_id ) {
+				$reason = $this->restore( (int) $post_id, $batch_id );
+				if ( '' === $reason ) {
+					$batch['restored'][] = (int) $post_id;
+				} else {
+					$batch['skipped'][ (int) $post_id ] = $reason;
+				}
 			}
+		} finally {
+			$this->issues->commit();
 		}
 
 		$this->batches->update( $batch );
@@ -301,6 +311,33 @@ final class Fixer {
 		}
 
 		return 0;
+	}
+
+	/**
+	 * How many Custom HTML blocks in some content hold nothing.
+	 *
+	 * @param string $content Block markup.
+	 * @return int
+	 */
+	public static function empty_html_blocks( string $content ): int {
+		if ( false === strpos( $content, 'wp:html' ) ) {
+			return 0;
+		}
+
+		$count = 0;
+		$walk  = static function ( array $blocks ) use ( &$walk, &$count ): void {
+			foreach ( $blocks as $block ) {
+				if ( 'core/html' === $block['blockName'] && '' === trim( (string) $block['innerHTML'] ) && '' === trim( (string) ( $block['attrs']['content'] ?? '' ) ) ) {
+					++$count;
+				}
+				if ( ! empty( $block['innerBlocks'] ) ) {
+					$walk( $block['innerBlocks'] );
+				}
+			}
+		};
+		$walk( parse_blocks( $content ) );
+
+		return $count;
 	}
 
 	/**

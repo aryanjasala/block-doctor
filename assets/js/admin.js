@@ -27,13 +27,19 @@
 	const ROUTE = '/block-doctor/v1';
 
 	const TEXT = {
-		invalid: __( 'Block contains unexpected or invalid content.', 'block-doctor' ),
+		invalid: __( 'The saved markup no longer matches what the block produces.', 'block-doctor' ),
 		/* translators: %s: block name, such as acme/widget. */
 		missing: __( 'Block type %s is not registered. Its plugin may be inactive or deleted.', 'block-doctor' ),
 		/* translators: %s: start of the text. */
 		classic: __( 'Classic content between blocks: "%s"', 'block-doctor' ),
 		classicWhole: __( 'The whole post is classic content, with no blocks.', 'block-doctor' ),
 		deprecated: __( 'Saved by an older version of the block. The markup changes the next time the post is saved.', 'block-doctor' ),
+		error: __( 'The scan could not read the blocks of this post, so they were not checked.', 'block-doctor' ),
+	};
+
+	const KEPT_REASONS = {
+		empty: __( 'It has no saved HTML, because its plugin renders it, so a Custom HTML block would be empty. It stays as it is.', 'block-doctor' ),
+		filter: __( 'A blockDoctor.fixBlock filter left it as it is.', 'block-doctor' ),
 	};
 
 	const SKIP_REASONS = {
@@ -47,6 +53,11 @@
 	const FIXABLE = [ 'invalid', 'missing', 'classic', 'deprecated' ];
 
 	const request = ( method, path, body ) => wp.apiFetch( { method, path: ROUTE + path, data: body } );
+
+	// Block types the server registry knows: never reported as unregistered, even when their editor script does not load here.
+	const serverBlocks = new Set( data.serverBlocks || [] );
+	const isRegistered = ( name ) => serverBlocks.has( name );
+	const scanOptions = () => ( { text: TEXT, isRegistered } );
 
 	/** Posts per scan request, through the blockDoctor.batchSize filter. */
 	function batchSize() {
@@ -80,14 +91,57 @@
 
 	const kindInfo = ( key ) => data.kinds.find( ( kind ) => kind.key === key ) || { key, label: key, description: '', fix: '' };
 
-	const position = ( path ) =>
-		sprintf(
-			/* translators: %s: block position, such as 3 or 3 > 1. */
-			__( 'block %s', 'block-doctor' ),
-			( path || [] ).map( ( n ) => n + 1 ).join( ' › ' )
+	/**
+	 * Where a block is, in words: "block 3 from the top", or "block 1 inside block 3".
+	 *
+	 * @param {number[]} path Path from 0, one number per level.
+	 * @return {string} Position.
+	 */
+	const position = ( path ) => {
+		const steps = ( path && path.length ? path : [ 0 ] ).map( ( n ) => n + 1 );
+		if ( steps.length === 1 ) {
+			/* translators: %s: position of a top-level block in the post, such as 3. */
+			return sprintf( __( 'block %s from the top', 'block-doctor' ), steps[ 0 ] );
+		}
+		return sprintf(
+			/* translators: 1: position of the block inside its parent, such as 1, 2: position of the parent, such as 3 or 3 › 2. */
+			__( 'block %1$s inside block %2$s', 'block-doctor' ),
+			steps[ steps.length - 1 ],
+			steps.slice( 0, -1 ).join( ' › ' )
 		);
+	};
 
-	const formatDate = ( time ) => ( time ? new Date( time * 1000 ).toLocaleString() : '' );
+	/**
+	 * The block's title, such as Heading, or its name when no script registers it here.
+	 *
+	 * @param {string} name Block name.
+	 * @return {string} Title.
+	 */
+	const blockTitle = ( name ) => {
+		const type = name ? wp.blocks.getBlockType( name ) : null;
+		return type && type.title ? String( type.title ) : name;
+	};
+
+	/**
+	 * A date and time in the site's format and time zone, like the rest of wp-admin.
+	 *
+	 * @param {number} time Unix time.
+	 * @return {string} Date.
+	 */
+	const formatDate = ( time ) => {
+		if ( ! time ) {
+			return '';
+		}
+		return wp.date && wp.date.dateI18n ? wp.date.dateI18n( data.dateFormat, time * 1000 ) : new Date( time * 1000 ).toLocaleString();
+	};
+
+	/**
+	 * Technical text with `code` in backticks, as elements: the backticks themselves never show.
+	 *
+	 * @param {string} text Text.
+	 * @return {Array} Strings and code elements.
+	 */
+	const withCode = ( text ) => String( text ).split( /`([^`]*)`/ ).map( ( part, index ) => ( index % 2 ? el( 'code', { key: index }, part ) : part ) );
 
 	function errorMessage( error ) {
 		return ( error && error.message ) || __( 'Something went wrong. Reload the page and try again.', 'block-doctor' );
@@ -104,17 +158,20 @@
 		return posts.map( ( post ) => {
 			let result;
 			try {
-				result = core.repair( post.content, wp.blocks, {
-					kinds: options.kinds,
-					strategies: options.strategies,
-					strategy: data.strategy,
-					text: TEXT,
-					fixBlock: ( value, block, context ) => fixBlockFilter( value, block, Object.assign( {}, context, { post } ) ),
-				} );
+				result = core.repair(
+					post.content,
+					wp.blocks,
+					Object.assign( scanOptions(), {
+						kinds: options.kinds,
+						strategies: options.strategies,
+						strategy: data.strategy,
+						fixBlock: ( value, block, context ) => fixBlockFilter( value, block, Object.assign( {}, context, { post } ) ),
+					} )
+				);
 			} catch ( error ) {
-				result = { content: post.content, changed: false, fixed: [], error: error.message };
+				result = { content: post.content, changed: false, fixed: [], kept: [], error: error.message };
 			}
-			const left = result.changed ? core.scan( result.content, wp.blocks, { text: TEXT } ) : null;
+			const left = result.changed ? core.scanPost( result.content, wp.blocks, scanOptions() ) : null;
 			return { post, result, left };
 		} );
 	}
@@ -155,7 +212,9 @@
 	}
 
 	function PreviewItem( { item } ) {
-		const [ open, setOpen ] = useState( false );
+		// Custom HTML keeps the markup but drops the block's settings: show what changes straight away.
+		const [ open, setOpen ] = useState( () => item.result.fixed.some( ( issue ) => issue.kind === 'missing' ) );
+		const kept = item.result.kept || [];
 		const counts = {};
 		item.result.fixed.forEach( ( issue ) => {
 			counts[ issue.kind ] = ( counts[ issue.kind ] || 0 ) + 1;
@@ -180,9 +239,27 @@
 							)
 					  )
 					: null,
-				el( Button, { variant: 'link', className: 'bdr-toggle-diff', 'aria-expanded': open, onClick: () => setOpen( ! open ) }, open ? __( 'Hide changes', 'block-doctor' ) : __( 'Show changes', 'block-doctor' ) )
+				item.result.changed
+					? el( Button, { variant: 'link', className: 'bdr-toggle-diff', 'aria-expanded': open, onClick: () => setOpen( ! open ) }, open ? __( 'Hide changes', 'block-doctor' ) : __( 'Show changes', 'block-doctor' ) )
+					: null
 			),
-			open && el( Diff, { before: item.post.content, after: item.result.content } )
+			kept.length
+				? el(
+						'ul',
+						{ className: 'bdr-kept' },
+						kept.map( ( issue, index ) =>
+							el(
+								'li',
+								{ key: index, 'data-reason': issue.reason },
+								el( 'strong', null, blockTitle( issue.name ) ),
+								issue.name && blockTitle( issue.name ) !== issue.name ? el( 'code', { className: 'bdr-slug' }, issue.name ) : null,
+								' ',
+								KEPT_REASONS[ issue.reason ] || KEPT_REASONS.filter
+							)
+						)
+				  )
+				: null,
+			open && item.result.changed && el( Diff, { before: item.post.content, after: item.result.content } )
 		);
 	}
 
@@ -220,13 +297,15 @@
 
 		const items = useMemo( () => ( posts ? prepare( posts, { kinds, strategies } ) : [] ), [ posts, kinds, strategies ] );
 		const changed = items.filter( ( item ) => item.result.changed );
+		const listed = items.filter( ( item ) => item.result.changed || ( item.result.kept && item.result.kept.length ) );
+		const keptCount = items.reduce( ( sum, item ) => sum + ( item.result.kept ? item.result.kept.length : 0 ), 0 );
 
 		// Block types with invalid content in these posts: each can be recovered or turned into Custom HTML.
 		const invalidTypes = useMemo( () => {
 			const names = {};
 			if ( kinds.invalid && posts ) {
 				posts.forEach( ( post ) => {
-					core.scan( post.content, wp.blocks, { text: TEXT } ).forEach( ( issue ) => {
+					core.scanPost( post.content, wp.blocks, scanOptions() ).forEach( ( issue ) => {
 						if ( issue.kind === 'invalid' ) {
 							names[ issue.name ] = ( names[ issue.name ] || 0 ) + 1;
 						}
@@ -238,34 +317,57 @@
 
 		async function apply() {
 			setPhase( 'saving' );
+			setError( '' );
 			const state = { done: 0, saved: [], errors: [], batch: null };
+			setApplied( Object.assign( {}, state ) );
+			let batch;
 			try {
-				const batch = await request( 'POST', '/batches', { kinds: Object.keys( kinds ).filter( ( kind ) => kinds[ kind ] && kinds[ kind ] !== 'keep' ) } );
-				state.batch = batch.id;
-				for ( const item of changed ) {
-					try {
-						const result = await request( 'POST', '/fix', { post_id: item.post.id, batch: batch.id, content: item.result.content, hash: item.post.hash, issues: item.left || [] } );
-						state.saved.push( item.post.id );
-						/**
-						 * Fires after a fixed post is saved.
-						 *
-						 * @param {Object} post    The post as it was before the fix: id, type, title, content, hash.
-						 * @param {Object} result  From the server: post_id, changed, revision (with the content before the fix), issues (how many are left).
-						 * @param {number} batchId The batch, for Undo batch.
-						 */
-						wp.hooks.doAction( 'blockDoctor.postFixed', item.post, result, batch.id );
-					} catch ( caught ) {
-						state.errors.push( { post: item.post, message: errorMessage( caught ) } );
-					}
-					state.done++;
-					setApplied( Object.assign( {}, state ) );
-				}
+				batch = await request( 'POST', '/batches', { kinds: Object.keys( kinds ).filter( ( kind ) => kinds[ kind ] && kinds[ kind ] !== 'keep' ) } );
 			} catch ( caught ) {
+				// Nothing was saved. Stay on the preview, so the fixes can be applied again later.
 				setError( errorMessage( caught ) );
+				setPhase( 'review' );
+				return;
+			}
+			state.batch = batch.id;
+			for ( const item of changed ) {
+				try {
+					const result = await request( 'POST', '/fix', { post_id: item.post.id, batch: batch.id, content: item.result.content, hash: item.post.hash, issues: item.left || [] } );
+					state.saved.push( item.post.id );
+					/**
+					 * Fires after a fixed post is saved.
+					 *
+					 * @param {Object} post    The post as it was before the fix: id, type, title, content, hash.
+					 * @param {Object} result  From the server: post_id, changed, revision (with the content before the fix), issues (how many are left).
+					 * @param {number} batchId The batch, for Undo batch.
+					 */
+					wp.hooks.doAction( 'blockDoctor.postFixed', item.post, result, batch.id );
+				} catch ( caught ) {
+					state.errors.push( { post: item.post, message: errorMessage( caught ) } );
+				}
+				state.done++;
+				setApplied( Object.assign( {}, state ) );
+			}
+
+			if ( ! state.saved.length ) {
+				// Every save was refused, for example during a site freeze: only the error, and the preview stays.
+				const messages = Array.from( new Set( state.errors.map( ( entry ) => entry.message ) ) );
+				setError( messages.length === 1 ? messages[ 0 ] : __( 'None of the fixes could be saved.', 'block-doctor' ) );
+				setApplied( { done: 0, saved: [], errors: messages.length > 1 ? state.errors : [], batch: null } );
+				setPhase( 'review' );
+				return;
 			}
 			setApplied( Object.assign( {}, state ) );
 			setPhase( 'done' );
 		}
+
+		const errorList = applied.errors.length
+			? el(
+					'ul',
+					{ className: 'bdr-errors' },
+					applied.errors.map( ( entry ) => el( 'li', { key: entry.post.id }, el( 'strong', null, entry.post.title ), ': ', entry.message ) )
+			  )
+			: null;
 
 		let body;
 		if ( phase === 'loading' ) {
@@ -304,40 +406,46 @@
 						applied.batch
 					)
 				),
-				applied.errors.length
-					? el(
-							'ul',
-							{ className: 'bdr-errors' },
-							applied.errors.map( ( item ) => el( 'li', { key: item.post.id }, el( 'strong', null, item.post.title ), ': ', item.message ) )
-					  )
-					: null
+				errorList
 			);
 		} else {
 			body = el(
 				Fragment,
 				null,
+				errorList,
 				Object.keys( invalidTypes ).length
 					? el(
 							'div',
 							{ className: 'bdr-strategies' },
 							el( 'h3', null, __( 'Invalid blocks', 'block-doctor' ) ),
 							el( 'p', { className: 'description' }, __( 'Recover rebuilds the block from its settings, like Attempt Block Recovery in the editor. Custom HTML keeps the markup exactly as it is, in a Custom HTML block.', 'block-doctor' ) ),
-							Object.keys( invalidTypes )
-								.sort()
-								.map( ( name ) =>
-									el( SelectControl, {
-										key: name,
-										className: 'bdr-strategy',
-										label: sprintf( '%1$s (%2$s)', name, invalidTypes[ name ] ),
-										value: strategies[ name ] || data.strategy,
-										options: [
-											{ value: 'recover', label: __( 'Recover the block', 'block-doctor' ) },
-											{ value: 'html', label: __( 'Convert to Custom HTML', 'block-doctor' ) },
-										],
-										onChange: ( value ) => setStrategies( Object.assign( {}, strategies, { [ name ]: value } ) ),
-										__nextHasNoMarginBottom: true,
-									} )
-								)
+							el(
+								'div',
+								{ className: 'bdr-strategy-list' },
+								Object.keys( invalidTypes )
+									.sort()
+									.map( ( name ) =>
+										el( SelectControl, {
+											key: name,
+											className: 'bdr-strategy',
+											label: sprintf(
+												/* translators: 1: block title, such as Image, 2: number of blocks. */
+												_n( '%1$s, %2$s block', '%1$s, %2$s blocks', invalidTypes[ name ], 'block-doctor' ),
+												blockTitle( name ),
+												invalidTypes[ name ]
+											),
+											help: name,
+											value: strategies[ name ] || data.strategy,
+											options: [
+												{ value: 'recover', label: __( 'Recover the block', 'block-doctor' ) },
+												{ value: 'html', label: __( 'Convert to Custom HTML', 'block-doctor' ) },
+											],
+											onChange: ( value ) => setStrategies( Object.assign( {}, strategies, { [ name ]: value } ) ),
+											__nextHasNoMarginBottom: true,
+											__next40pxDefaultSize: true,
+										} )
+									)
+							)
 					  )
 					: null,
 				el(
@@ -350,12 +458,20 @@
 								changed.length,
 								items.length
 						  )
-						: __( 'Nothing to change in these posts with the chosen fixes.', 'block-doctor' )
+						: __( 'Nothing to change in these posts with the chosen fixes.', 'block-doctor' ),
+					keptCount
+						? ' ' +
+								sprintf(
+									/* translators: %s: number of blocks. */
+									_n( '%s block stays as it is, see why below.', '%s blocks stay as they are, see why below.', keptCount, 'block-doctor' ),
+									keptCount
+								)
+						: ''
 				),
 				el(
 					'ul',
 					{ className: 'bdr-preview-list' },
-					changed.map( ( item ) => el( PreviewItem, { key: item.post.id, item } ) )
+					listed.map( ( item ) => el( PreviewItem, { key: item.post.id, item } ) )
 				)
 			);
 		}
@@ -429,12 +545,8 @@
 						if ( ! wp.hooks.applyFilters( 'blockDoctor.shouldScanPost', true, post ) ) {
 							return;
 						}
-						let issues = [];
-						try {
-							issues = core.scan( post.content, wp.blocks, { text: TEXT } );
-						} catch ( error ) {
-							issues = [];
-						}
+						// A post the scan cannot read gets an error issue, so it is never stored as clean.
+						const issues = core.scanPost( post.content, wp.blocks, scanOptions() );
 						issues.forEach( ( issue ) => {
 							/**
 							 * Fires for every issue the browser scan finds.
@@ -557,28 +669,110 @@
 					{ value: 'keep', label: __( 'Leave them as they are', 'block-doctor' ) },
 					{ value: 'html', label: __( 'Convert to Custom HTML', 'block-doctor' ) },
 				],
+				help: __( 'Blocks with no saved HTML, such as dynamic blocks, always stay as they are.', 'block-doctor' ),
 				onChange: toggle( 'missing' ),
 				__nextHasNoMarginBottom: true,
+				__next40pxDefaultSize: true,
 			} )
 		);
 	}
 
+	/**
+	 * One block with an issue: its title, its name, its first words, where it is, and the message unless the group shows it.
+	 *
+	 * @param {Object}  props        Props.
+	 * @param {Object}  props.issue  Issue.
+	 * @param {boolean} props.shared Whether the group already shows the message.
+	 */
+	function IssueItem( { issue, shared } ) {
+		const title = blockTitle( issue.name );
+		// Classic content is not a block of its own: the badge and the message say all there is.
+		const named = issue.name && issue.kind !== 'classic';
+		return el(
+			'li',
+			{ className: 'bdr-issue', 'data-kind': issue.kind },
+			named ? el( 'span', { className: 'bdr-block' }, title ) : null,
+			named && title !== issue.name ? el( 'code', { className: 'bdr-slug' }, issue.name ) : null,
+			named && issue.excerpt ? el( 'span', { className: 'bdr-excerpt' }, '“' + issue.excerpt + '”' ) : null,
+			named ? el( 'span', { className: 'bdr-position' }, position( issue.path ) ) : null,
+			shared ? null : el( 'span', { className: 'bdr-message' }, issue.message ),
+			issue.detail
+				? el( 'details', { className: 'bdr-detail' }, el( 'summary', null, __( 'Technical details', 'block-doctor' ) ), el( 'span', { className: 'bdr-detail-text' }, withCode( issue.detail ) ) )
+				: null
+		);
+	}
+
+	/**
+	 * A post's issues, grouped by kind: "Outdated: 12 blocks (List ×8, Heading ×4)".
+	 *
+	 * @param {Object}   props        Props.
+	 * @param {Object[]} props.issues Issues.
+	 */
 	function IssueList( { issues } ) {
+		const groups = [];
+		issues.forEach( ( issue ) => {
+			let group = groups.find( ( entry ) => entry.kind === issue.kind );
+			if ( ! group ) {
+				group = { kind: issue.kind, issues: [] };
+				groups.push( group );
+			}
+			group.issues.push( issue );
+		} );
+
 		return el(
 			'ul',
 			{ className: 'bdr-issues' },
-			issues.map( ( issue, index ) =>
-				el(
+			groups.map( ( group ) => {
+				const blocks = group.issues.filter( ( issue ) => issue.name && issue.kind !== 'classic' );
+				const titles = {};
+				blocks.forEach( ( issue ) => {
+					const title = blockTitle( issue.name );
+					titles[ title ] = ( titles[ title ] || 0 ) + 1;
+				} );
+				const messages = Array.from( new Set( group.issues.map( ( issue ) => issue.message ) ) );
+				const shared = group.issues.length > 1 && messages.length === 1;
+				const list = el(
+					'ul',
+					{ className: 'bdr-group-items' },
+					group.issues.map( ( issue, index ) => el( IssueItem, { key: index, issue, shared } ) )
+				);
+				return el(
 					'li',
-					{ key: index, 'data-kind': issue.kind },
-					el( KindBadge, { kind: issue.kind } ),
-					' ',
-					issue.name ? el( 'code', null, issue.name ) : null,
-					issue.name ? ' ' : null,
-					el( 'span', { className: 'bdr-position' }, position( issue.path ) ),
-					el( 'span', { className: 'bdr-message' }, issue.message )
-				)
-			)
+					{ key: group.kind, className: 'bdr-group', 'data-kind': group.kind },
+					el( KindBadge, { kind: group.kind } ),
+					blocks.length > 1
+						? el(
+								'span',
+								{ className: 'bdr-group-summary' },
+								sprintf(
+									/* translators: 1: number of blocks, 2: block titles with counts, such as List ×8, Heading ×4. */
+									_n( '%1$s block: %2$s', '%1$s blocks: %2$s', blocks.length, 'block-doctor' ),
+									blocks.length,
+									Object.keys( titles )
+										.map( ( title ) => ( titles[ title ] > 1 ? title + ' ×' + titles[ title ] : title ) )
+										.join( ', ' )
+								)
+						  )
+						: null,
+					shared ? el( 'span', { className: 'bdr-message' }, messages[ 0 ] ) : null,
+					group.issues.length > 3
+						? el(
+								'details',
+								{ className: 'bdr-group-more' },
+								el(
+									'summary',
+									null,
+									sprintf(
+										/* translators: %s: number of blocks. */
+										__( 'Show all %s', 'block-doctor' ),
+										group.issues.length
+									)
+								),
+								list
+						  )
+						: list
+				);
+			} )
 		);
 	}
 
@@ -608,6 +802,7 @@
 
 		const counts = summary.counts || {};
 		const tabs = data.kinds.filter( ( kind ) => counts[ kind.key ] && counts[ kind.key ].posts );
+		const tabCounts = tab && counts[ tab ] ? counts[ tab ] : null;
 		const items = report ? report.items : [];
 		const pageIds = items.map( ( item ) => item.id );
 		const allOnPage = pageIds.length && pageIds.every( ( id ) => selected.includes( id ) );
@@ -648,16 +843,15 @@
 			el( 'h2', null, __( 'Report', 'block-doctor' ) ),
 			el(
 				'div',
-				{ className: 'bdr-tabs', role: 'tablist' },
+				{ className: 'bdr-tabs', role: 'group', 'aria-label': __( 'Show the posts with one kind of issue', 'block-doctor' ) },
 				[ { key: '', label: __( 'All', 'block-doctor' ) } ].concat( tabs ).map( ( kind ) =>
 					el(
 						'button',
 						{
 							key: kind.key,
 							type: 'button',
-							role: 'tab',
 							className: 'bdr-tab' + ( tab === kind.key ? ' is-active' : '' ),
-							'aria-selected': tab === kind.key,
+							'aria-pressed': tab === kind.key,
 							'data-kind': kind.key || 'all',
 							title: kind.description || '',
 							onClick: () => {
@@ -667,7 +861,8 @@
 						},
 						kind.label,
 						' ',
-						el( 'span', { className: 'bdr-count' }, kind.key ? counts[ kind.key ].issues : summary.posts )
+						// Every pill counts posts, like the table below it.
+						el( 'span', { className: 'bdr-count' }, kind.key ? counts[ kind.key ].posts : summary.posts )
 					)
 				)
 			),
@@ -676,7 +871,22 @@
 				: el(
 						Fragment,
 						null,
-						tab ? el( 'p', { className: 'description bdr-kind-description' }, kindInfo( tab ).description ) : null,
+						tab
+							? el(
+									'p',
+									{ className: 'description bdr-kind-description' },
+									kindInfo( tab ).description,
+									tabCounts
+										? ' ' +
+												sprintf(
+													/* translators: 1: number of blocks, such as "381 blocks", 2: number of posts, such as "75 posts". */
+													__( '%1$s in %2$s.', 'block-doctor' ),
+													sprintf( /* translators: %s: number of blocks. */ _n( '%s block', '%s blocks', tabCounts.issues, 'block-doctor' ), tabCounts.issues ),
+													sprintf( /* translators: %s: number of posts. */ _n( '%s post', '%s posts', tabCounts.posts, 'block-doctor' ), tabCounts.posts )
+												)
+										: ''
+							  )
+							: null,
 						el( FixOptions, { kinds, setKinds } ),
 						el(
 							'div',
@@ -749,7 +959,7 @@
 											'td',
 											{ className: 'bdr-post' },
 											el( 'a', { href: item.edit_link, className: 'row-title' }, item.title || sprintf( /* translators: %d: post ID. */ __( 'Post #%d', 'block-doctor' ), item.id ) ),
-											el( 'div', { className: 'bdr-meta' }, item.type_label, ' · ', item.status ),
+											el( 'div', { className: 'bdr-meta' }, item.type_label, ' · ', item.status_label || item.status ),
 											item.stale ? el( 'div', { className: 'bdr-stale' }, __( 'Changed since the scan', 'block-doctor' ) ) : null
 										),
 										el( 'td', null, el( IssueList, { issues: item.issues } ) )

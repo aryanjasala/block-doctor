@@ -114,7 +114,7 @@ final class ChecksTest extends PluginTestCase {
 		$this->assertSame( 'Attachment #32 was deleted from the Media Library. The block may still show a copy of the file, or a broken one.', $issues[1]['message'] );
 	}
 
-	public function test_the_checks_filter_adds_and_removes_checks_and_run_survives_a_broken_one(): void {
+	public function test_the_checks_filter_adds_and_removes_checks_and_a_broken_one_is_reported_not_hidden(): void {
 		$post = $this->add_post( 'content' );
 		Functions\when( 'parse_blocks' )->justReturn( array( self::block( 'core/paragraph' ) ) );
 		Filters\expectApplied( 'block_doctor_server_checks' )->once()->andReturnUsing(
@@ -132,7 +132,23 @@ final class ChecksTest extends PluginTestCase {
 			}
 		);
 
-		$this->assertSame( array( array( 'kind' => 'shortcode', 'path' => array( 0 ) ) ), ( new Checks() )->run( $post ) );
+		$this->assertSame(
+			array(
+				array(
+					'kind' => 'shortcode',
+					'path' => array( 0 ),
+				),
+				// A check that throws is reported, so the post is never stored as clean.
+				array(
+					'kind'    => 'error',
+					'path'    => array( 0 ),
+					'name'    => '',
+					'message' => 'The broken check stopped with an error, so this post was not fully checked.',
+					'detail'  => 'Oops',
+				),
+			),
+			( new Checks() )->run( $post )
+		);
 	}
 
 	public function test_walk_counts_real_blocks_only(): void {

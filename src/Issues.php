@@ -15,7 +15,12 @@ defined( 'ABSPATH' ) || exit;
  * never need a meta query.
  *
  * A post's record is `array( 'hash' => md5 of the content scanned, 'time' => unix time, 'issues' => list )`.
- * Each issue has `kind`, `path` (block position from 0, one number per level), `name`, `message` and `source` (`browser` or `server`).
+ * Each issue has `kind`, `path` (block position from 0, one number per level), `name`, `message`,
+ * `detail` (technical text, such as the editor's validation message, or ''), `excerpt` (the block's
+ * first words, or '') and `source` (`browser` or `server`).
+ *
+ * The index is one option that grows with the site, so a scan changes it in
+ * memory and writes it once per batch of posts (batch()), not once per post.
  */
 final class Issues implements Service {
 
@@ -29,6 +34,34 @@ final class Issues implements Service {
 	 * @var Config
 	 */
 	private Config $config;
+
+	/**
+	 * The index while a batch() is running, written once when it ends. Null outside a batch.
+	 *
+	 * @var array|null
+	 */
+	private ?array $pending = null;
+
+	/**
+	 * How many batch() calls are open.
+	 *
+	 * @var int
+	 */
+	private int $depth = 0;
+
+	/**
+	 * Whether the pending index changed.
+	 *
+	 * @var bool
+	 */
+	private bool $changed = false;
+
+	/**
+	 * Whether deleted posts keep the index open until the request ends.
+	 *
+	 * @var bool
+	 */
+	private bool $until_shutdown = false;
 
 	/**
 	 * Sets up the store.
@@ -145,13 +178,69 @@ final class Issues implements Service {
 	 */
 	public function forget( $post_id ): void {
 		$post_id = (int) $post_id;
-		$index   = $this->index();
-		if ( ! isset( $index[ $post_id ] ) ) {
+		if ( ! isset( $this->index()[ $post_id ] ) ) {
 			return;
 		}
 		delete_post_meta( $post_id, self::META );
+
+		// Emptying the trash deletes many posts in one request: write the index once, when the request ends.
+		if ( ! $this->until_shutdown ) {
+			$this->until_shutdown = true;
+			$this->begin();
+			add_action( 'shutdown', array( $this, 'commit' ) );
+		}
+		$index = $this->index();
 		unset( $index[ $post_id ] );
-		update_option( self::INDEX, $index, false );
+		$this->write( $index );
+	}
+
+	/**
+	 * Runs some work with the index kept in memory, and writes it once at the end.
+	 *
+	 * @template T
+	 * @param callable(): T $work The work.
+	 * @return T What the work returns.
+	 */
+	public function batch( callable $work ) {
+		$this->begin();
+		try {
+			return $work();
+		} finally {
+			$this->commit();
+		}
+	}
+
+	/**
+	 * Starts keeping the index in memory. Pair every call with commit().
+	 */
+	public function begin(): void {
+		if ( 0 === $this->depth ) {
+			$this->pending = $this->stored_index();
+			$this->changed = false;
+		}
+		++$this->depth;
+	}
+
+	/**
+	 * Ends what begin() started, and writes the index when the outermost one ends and something changed.
+	 */
+	public function commit(): void {
+		if ( $this->depth < 1 ) {
+			return;
+		}
+		--$this->depth;
+		if ( $this->depth > 0 || null === $this->pending ) {
+			return;
+		}
+		if ( $this->changed ) {
+			if ( $this->pending ) {
+				update_option( self::INDEX, $this->pending, false );
+			} else {
+				delete_option( self::INDEX );
+			}
+		}
+		$this->pending = null;
+		$this->changed = false;
 	}
 
 	/**
@@ -163,6 +252,10 @@ final class Issues implements Service {
 		$count = count( $this->index() );
 		delete_post_meta_by_key( self::META );
 		delete_option( self::INDEX );
+		if ( null !== $this->pending ) {
+			$this->pending = array();
+			$this->changed = false;
+		}
 
 		return $count;
 	}
@@ -173,9 +266,33 @@ final class Issues implements Service {
 	 * @return array<int, array{type: string, kinds: array<string, int>}>
 	 */
 	public function index(): array {
+		return null !== $this->pending ? $this->pending : $this->stored_index();
+	}
+
+	/**
+	 * The index as stored.
+	 *
+	 * @return array<int, array{type: string, kinds: array<string, int>}>
+	 */
+	private function stored_index(): array {
 		$index = get_option( self::INDEX, array() );
 
 		return is_array( $index ) ? $index : array();
+	}
+
+	/**
+	 * Saves the index, or keeps it in memory during a batch.
+	 *
+	 * @param array $index Index.
+	 */
+	private function write( array $index ): void {
+		if ( null !== $this->pending ) {
+			$this->pending = $index;
+			$this->changed = true;
+			return;
+		}
+
+		update_option( self::INDEX, $index, false );
 	}
 
 	/**
@@ -280,16 +397,18 @@ final class Issues implements Service {
 				)
 			);
 			$type   = get_post_type_object( $post->post_type );
+			$status = get_post_status_object( $post->post_status );
 			$rows[] = array(
-				'id'         => (int) $post->ID,
-				'title'      => '' !== $post->post_title ? (string) $post->post_title : (string) $post->post_name,
-				'type'       => (string) $post->post_type,
-				'type_label' => $type ? (string) $type->labels->singular_name : (string) $post->post_type,
-				'status'     => (string) $post->post_status,
-				'edit_link'  => (string) get_edit_post_link( $post->ID, 'raw' ),
-				'scanned'    => (int) $record['time'],
-				'stale'      => md5( $post->post_content ) !== $record['hash'],
-				'issues'     => $issues,
+				'id'           => (int) $post->ID,
+				'title'        => '' !== $post->post_title ? (string) $post->post_title : (string) $post->post_name,
+				'type'         => (string) $post->post_type,
+				'type_label'   => $type ? (string) $type->labels->singular_name : (string) $post->post_type,
+				'status'       => (string) $post->post_status,
+				'status_label' => $status && is_string( $status->label ) ? $status->label : (string) $post->post_status,
+				'edit_link'    => (string) get_edit_post_link( $post->ID, 'raw' ),
+				'scanned'      => (int) $record['time'],
+				'stale'        => md5( $post->post_content ) !== $record['hash'],
+				'issues'       => $issues,
 			);
 		}
 
@@ -321,6 +440,8 @@ final class Issues implements Service {
 				'path'    => $path ? $path : array( 0 ),
 				'name'    => self::block_name( (string) ( $issue['name'] ?? '' ) ),
 				'message' => mb_substr( sanitize_text_field( (string) ( $issue['message'] ?? '' ) ), 0, 500 ),
+				'detail'  => mb_substr( sanitize_text_field( (string) ( $issue['detail'] ?? '' ) ), 0, 500 ),
+				'excerpt' => mb_substr( sanitize_text_field( (string) ( $issue['excerpt'] ?? '' ) ), 0, 100 ),
 				'source'  => 'browser' === $source ? 'browser' : sanitize_key( $source ),
 			);
 		}
@@ -366,6 +487,6 @@ final class Issues implements Service {
 			);
 		}
 
-		update_option( self::INDEX, $index, false );
+		$this->write( $index );
 	}
 }
