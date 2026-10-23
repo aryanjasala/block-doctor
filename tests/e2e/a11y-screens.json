@@ -50,7 +50,5 @@
       "cleanup": [{ "js": "seed.js", "call": "reset" }]
     }
   ],
-  "skip": {
-    "Fix batches with Undo after applying a fix": "On WordPress 6.9, the Undo batch button's blue text sits on the grey striped row at 4.26:1, under the 4.5:1 minimum. The follow-up fix: PR gives the button a white background and removes this entry."
-  }
+  "skip": {}
 }

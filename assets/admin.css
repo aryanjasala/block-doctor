@@ -293,6 +293,12 @@
 	color: #646970;
 }
 
+/* Secondary buttons have no background of their own. On the grey rows of a
+   striped table their text drops under 4.5:1 with the older admin blue. */
+.bdr-panel .striped .components-button.is-secondary {
+	background: #fff;
+}
+
 .bdr-notice {
 	margin: 16px 0;
 }
