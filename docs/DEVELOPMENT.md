@@ -20,6 +20,7 @@ There is no build step: the PHP runs as written, and the scripts in `assets/` us
 | `composer lint:fix` | PHPCBF, which fixes what PHPCS can fix on its own |
 | `composer analyse` | PHPStan level 6 with WordPress and WP-CLI stubs |
 | `composer test` | PHPUnit unit tests |
+| `npm run test:unit:js` | Node unit tests for the JavaScript in `assets/` |
 | `npm run test:e2e` | Playwright end-to-end tests against the Docker site, in headless Chrome |
 | `npm run screenshots` | Regenerates the screenshots in `.wordpress-org/` |
 | `npm run demo` | Records the README demo GIF in `.github/media/` (needs ffmpeg) |

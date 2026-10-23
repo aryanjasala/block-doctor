@@ -9,6 +9,7 @@
 | WordPress coding standards | PHPCS |
 | Static analysis | PHPStan level 6 |
 | PHPUnit (PHP 7.4 to 8.4) | The unit tests on six PHP versions |
+| JavaScript unit tests | Node tests for the JavaScript in `assets/` |
 | Playwright (WordPress latest) | The end-to-end suite against the latest WordPress in Docker |
 | WordPress.org Plugin Check | The official Plugin Check, on the zip that would ship |
 | Conventional PR title | The title format below |
