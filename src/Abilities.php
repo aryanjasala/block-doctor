@@ -151,6 +151,14 @@ final class Abilities implements Service {
 				),
 				'name'    => array( 'type' => 'string' ),
 				'message' => array( 'type' => 'string' ),
+				'detail'  => array(
+					'type'        => 'string',
+					'description' => 'Technical detail, such as the block editor\'s validation message, or empty.',
+				),
+				'excerpt' => array(
+					'type'        => 'string',
+					'description' => 'The first words of the block, or empty.',
+				),
 				'source'  => array( 'type' => 'string' ),
 			),
 		);
@@ -158,7 +166,7 @@ final class Abilities implements Service {
 		$this->ability(
 			'get-scan-summary',
 			__( 'Get scan summary', 'block-doctor' ),
-			__( 'Issue counts per kind from the stored results, how many posts have issues and how many have broken blocks, and the state of the last browser scan (Tools > Block Doctor) and server scan. Kinds: invalid (markup the editor rejects), missing (unregistered block type), classic, deprecated (outdated markup), empty, pattern-ref, navigation-ref and missing-media.', 'block-doctor' ),
+			__( 'Issue counts per kind from the stored results, how many posts have issues and how many have broken blocks, and the state of the last browser scan (Tools > Block Doctor) and server scan. Kinds: invalid (markup the editor rejects), missing (unregistered block type), classic, deprecated (outdated markup), empty, pattern-ref, navigation-ref, missing-media and error (a post the scan could not check).', 'block-doctor' ),
 			array(),
 			array(
 				'type'       => 'object',
@@ -181,7 +189,7 @@ final class Abilities implements Service {
 		$this->ability(
 			'list-issues',
 			__( 'List issues', 'block-doctor' ),
-			__( 'Posts with stored issues, lowest ID first, each with its issues: kind, block path (position from 0, one number per level), block name and message. `stale` means the post changed since it was scanned.', 'block-doctor' ),
+			__( 'Posts with stored issues, lowest ID first, each with its issues: kind, block path (position from 0, one number per level), block name, message, technical detail and the first words of the block. `stale` means the post changed since it was scanned.', 'block-doctor' ),
 			array(
 				'type'                 => 'object',
 				'properties'           => array(
@@ -218,14 +226,15 @@ final class Abilities implements Service {
 						'items' => array(
 							'type'       => 'object',
 							'properties' => array(
-								'id'        => array( 'type' => 'integer' ),
-								'title'     => array( 'type' => 'string' ),
-								'type'      => array( 'type' => 'string' ),
-								'status'    => array( 'type' => 'string' ),
-								'edit_link' => array( 'type' => 'string' ),
-								'scanned'   => array( 'type' => 'integer' ),
-								'stale'     => array( 'type' => 'boolean' ),
-								'issues'    => array(
+								'id'           => array( 'type' => 'integer' ),
+								'title'        => array( 'type' => 'string' ),
+								'type'         => array( 'type' => 'string' ),
+								'status'       => array( 'type' => 'string' ),
+								'status_label' => array( 'type' => 'string' ),
+								'edit_link'    => array( 'type' => 'string' ),
+								'scanned'      => array( 'type' => 'integer' ),
+								'stale'        => array( 'type' => 'boolean' ),
+								'issues'       => array(
 									'type'  => 'array',
 									'items' => $issue,
 								),

@@ -100,7 +100,8 @@ abstract class PluginTestCase extends TestCase {
 		$this->scheduled = array();
 		$this->cleared   = array();
 
-		\WP_Block_Type_Registry::$names = array( 'core/paragraph', 'core/heading', 'core/group', 'core/image', 'core/block', 'core/navigation', 'core/cover', 'core/media-text', 'core/html' );
+		\WP_Block_Type_Registry::$names          = array( 'core/paragraph', 'core/heading', 'core/group', 'core/image', 'core/block', 'core/navigation', 'core/cover', 'core/media-text', 'core/html' );
+		\WP_Block_Type_Registry::$editor_scripts = array();
 
 		$supports = array(
 			'post'             => array( 'editor', 'revisions' ),
@@ -126,6 +127,16 @@ abstract class PluginTestCase extends TestCase {
 			}
 		);
 		Functions\when( 'get_post_stati' )->justReturn( array_fill_keys( array( 'publish', 'future', 'draft', 'pending', 'private', 'trash', 'auto-draft', 'inherit' ), 'x' ) );
+		Functions\when( 'get_post_status_object' )->alias(
+			static function ( $status ) {
+				$labels = array(
+					'publish' => 'Published',
+					'private' => 'Private',
+					'draft'   => 'Draft',
+				);
+				return isset( $labels[ $status ] ) ? (object) array( 'label' => $labels[ $status ] ) : null;
+			}
+		);
 		Functions\when( 'get_post_type_object' )->alias(
 			static function ( $type ) {
 				return (object) array( 'labels' => (object) array( 'singular_name' => ucfirst( (string) $type ) ) );

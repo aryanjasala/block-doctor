@@ -82,10 +82,31 @@ final class ConfigTest extends PluginTestCase {
 		$this->assertSame( 'recover', $config->fix_strategy( '' ), 'anything but html recovers' );
 	}
 
+	public function test_the_date_format_comes_from_the_site_settings_and_a_filter(): void {
+		$this->options['date_format'] = 'Y-m-d';
+		$this->options['time_format'] = 'H:i';
+		$config                       = new Config();
+
+		$this->assertSame( 'Y-m-d H:i', $config->date_format() );
+
+		Filters\expectApplied( 'block_doctor_date_format' )->once()->with( 'Y-m-d H:i' )->andReturn( 'j M Y' );
+		$this->assertSame( 'j M Y', $config->date_format() );
+	}
+
+	public function test_a_bad_date_format_filter_falls_back_to_the_site_settings(): void {
+		$this->options['date_format'] = 'd/m/Y';
+		$this->options['time_format'] = 'g:i a';
+		Filters\expectApplied( 'block_doctor_date_format' )->once()->andReturn( array( 'nope' ) );
+
+		$this->assertSame( 'd/m/Y g:i a', ( new Config() )->date_format() );
+	}
+
 	public function test_issue_kinds_can_be_added_and_removed_but_only_the_built_in_ones_are_fixable(): void {
 		$config = new Config();
 		$kinds  = $config->issue_kinds();
-		$this->assertSame( array( 'invalid', 'missing', 'classic', 'deprecated', 'empty', 'pattern-ref', 'navigation-ref', 'missing-media' ), array_keys( $kinds ) );
+		$this->assertSame( array( 'invalid', 'missing', 'classic', 'deprecated', 'empty', 'pattern-ref', 'navigation-ref', 'missing-media', 'error' ), array_keys( $kinds ) );
+		$this->assertFalse( $kinds['error']['broken'], 'a post the scan could not check is not counted as broken' );
+		$this->assertSame( '', $kinds['error']['fix'] );
 		$this->assertSame( 'browser', $kinds['invalid']['fix'] );
 		$this->assertSame( '', $kinds['empty']['fix'] );
 		$this->assertFalse( $kinds['classic']['broken'] );

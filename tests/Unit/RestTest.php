@@ -153,7 +153,7 @@ final class RestTest extends PluginTestCase {
 
 		$batch = $controller->create_batch( new \WP_REST_Request( array( 'kinds' => array( 'invalid', 'bogus' ) ) ) )->get_data();
 		$this->assertSame( array( 'invalid' ), $batch['kinds'] );
-		$this->assertSame( array( $batch ), $controller->get_batches()->get_data() );
+		$this->assertSame( array(), $controller->get_batches()->get_data(), 'listed once it fixed a post' );
 
 		$error = $controller->fix( new \WP_REST_Request( array( 'post_id' => 404, 'batch' => $batch['id'], 'content' => 'x', 'hash' => 'y', 'issues' => array() ) ) );
 		$this->assertInstanceOf( \WP_Error::class, $error );

@@ -8,6 +8,7 @@
 namespace AryanX\BlockDoctor\Tests\Unit;
 
 use AryanX\BlockDoctor\Batches;
+use AryanX\BlockDoctor\Fixer;
 use AryanX\BlockDoctor\Issues;
 use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
@@ -207,12 +208,48 @@ final class FixerTest extends PluginTestCase {
 		$this->assertSame( array( 8 => 'nothing', 7 => 'forbidden' ), $plugin['fixer']->undo( $batch['id'] )['batch']['skipped'] );
 	}
 
+	public function test_a_fix_that_would_leave_an_empty_custom_html_block_is_refused(): void {
+		$plugin = $this->plugin();
+		Functions\when( 'wp_check_post_lock' )->justReturn( false );
+		Functions\when( 'parse_blocks' )->alias(
+			static function ( $content ) {
+				$blocks = array();
+				preg_match_all( '#<!-- wp:([a-z/-]+)( \{[^}]*\})? (/)?-->(.*?)(?:<!-- /wp:\1 -->|$)#s', (string) $content, $found, PREG_SET_ORDER );
+				foreach ( $found as $match ) {
+					$name     = false === strpos( $match[1], '/' ) ? 'core/' . $match[1] : $match[1];
+					$blocks[] = self::block( $name, array(), array(), empty( $match[3] ) ? (string) $match[4] : '' );
+				}
+				return $blocks;
+			}
+		);
+		$old  = "<!-- wp:paragraph --><p>Hi</p><!-- /wp:paragraph -->\n\n<!-- wp:acme/shots {\"ids\":[4]} /-->";
+		$post = $this->add_post( $old, array( 'ID' => 7 ) );
+		$batch = $plugin['batches']->create( array( 'missing' ) );
+
+		$result = $plugin['fixer']->fix( 7, $batch['id'], "<!-- wp:paragraph --><p>Hi</p><!-- /wp:paragraph -->\n\n<!-- wp:html /-->", md5( $old ) );
+
+		$this->assertInstanceOf( \WP_Error::class, $result );
+		$this->assertSame( 'block_doctor_empty_html', $result->get_error_code() );
+		$this->assertSame( array(), $this->updates, 'nothing saved' );
+		$this->assertSame( $old, $post->post_content );
+
+		// A Custom HTML block with markup in it is fine, and so is an empty one that was already there.
+		$this->assertSame( 0, Fixer::empty_html_blocks( '<!-- wp:html --><div>x</div><!-- /wp:html -->' ) );
+		$this->assertSame( 1, Fixer::empty_html_blocks( '<!-- wp:html --><!-- /wp:html -->' ) );
+		$this->assertSame( 0, Fixer::empty_html_blocks( '<p>no blocks</p>' ) );
+	}
+
 	public function test_batches_count_up_and_expire_after_the_undo_window(): void {
 		$batches = new Batches( new \AryanX\BlockDoctor\Config() );
 		$first   = $batches->create( array( 'invalid' ) );
 		$second  = $batches->create( array( 'classic' ) );
 
 		$this->assertSame( array( 1, 2 ), array( $first['id'], $second['id'] ) );
+		$this->assertSame( array(), $batches->all(), 'a batch that saved nothing has nothing to undo, so it is not listed' );
+		foreach ( array( $first, $second ) as $batch ) {
+			$batch['posts'] = array( 9 );
+			$batches->update( $batch );
+		}
 		$this->assertSame( array( 2, 1 ), array_keys( $batches->all() ), 'newest first' );
 
 		$batches->set_undo_data( 5, 1, array( 'before' => 3 ) );

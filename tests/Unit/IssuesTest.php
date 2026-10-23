@@ -44,6 +44,8 @@ final class IssuesTest extends PluginTestCase {
 						'path'    => array( 1, 2 ),
 						'name'    => 'core/heading',
 						'message' => 'Something is wrong.',
+						'detail'  => '',
+						'excerpt' => '',
 						'source'  => 'browser',
 					),
 				)
@@ -197,5 +199,40 @@ final class IssuesTest extends PluginTestCase {
 
 		$this->assertNotFalse( has_action( 'deleted_post', array( $issues, 'forget' ) ) );
 		$this->assertNotFalse( has_action( 'trashed_post', array( $issues, 'forget' ) ) );
+	}
+
+	public function test_issues_keep_a_technical_detail_and_the_first_words_cleaned_and_shortened(): void {
+		$post   = $this->add_post( 'x', array( 'ID' => 5 ) );
+		$issues = new Issues( new Config() );
+
+		$stored = $issues->save(
+			$post,
+			array(
+				'browser' => array(
+					array(
+						'kind'    => 'invalid',
+						'path'    => array( 0 ),
+						'name'    => 'core/code',
+						'message' => 'The saved markup no longer matches what the block produces.',
+						'detail'  => 'Expected attributes [], instead saw [["lang","bash",true]].<script>x</script>',
+						'excerpt' => str_repeat( 'word ', 40 ),
+					),
+				),
+			),
+			'h'
+		);
+
+		$this->assertSame( 'Expected attributes [], instead saw [["lang","bash",true]].x', $stored[0]['detail'] );
+		$this->assertSame( 100, mb_strlen( $stored[0]['excerpt'] ) );
+	}
+
+	public function test_rows_carry_the_post_status_label_for_people(): void {
+		$issues = new Issues( new Config() );
+		$issues->save( $this->add_post( 'x', array( 'ID' => 5 ) ), array( 'server' => array( self::issue( 'classic' ) ) ), md5( 'x' ) );
+		$issues->save( $this->add_post( 'y', array( 'ID' => 6, 'post_status' => 'private' ) ), array( 'server' => array( self::issue( 'classic' ) ) ), md5( 'y' ) );
+
+		$rows = $issues->rows( array( 5, 6 ) );
+		$this->assertSame( array( 'publish', 'private' ), array_column( $rows, 'status' ) );
+		$this->assertSame( array( 'Published', 'Private' ), array_column( $rows, 'status_label' ) );
 	}
 }

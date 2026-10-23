@@ -146,18 +146,26 @@ final class Scanner implements Service {
 	public function record( int $cursor, int $count, array $results, bool $finished ): array {
 		$state = $this->state( 'browser' );
 
-		foreach ( $results as $result ) {
-			if ( ! is_array( $result ) ) {
-				continue;
+		// One write of the results index for the whole batch, not one per post.
+		$state['found'] += $this->issues->batch(
+			function () use ( $results ): int {
+				$found = 0;
+				foreach ( $results as $result ) {
+					if ( ! is_array( $result ) ) {
+						continue;
+					}
+					$post = get_post( (int) ( $result['id'] ?? 0 ) );
+					if ( ! $post || ! $this->posts->is_scanned( $post ) || ! current_user_can( 'edit_post', $post->ID ) ) {
+						continue;
+					}
+					if ( $this->scan_post( $post, (array) ( $result['issues'] ?? array() ), (string) ( $result['hash'] ?? '' ) ) ) {
+						++$found;
+					}
+				}
+
+				return $found;
 			}
-			$post = get_post( (int) ( $result['id'] ?? 0 ) );
-			if ( ! $post || ! $this->posts->is_scanned( $post ) || ! current_user_can( 'edit_post', $post->ID ) ) {
-				continue;
-			}
-			if ( $this->scan_post( $post, (array) ( $result['issues'] ?? array() ), (string) ( $result['hash'] ?? '' ) ) ) {
-				++$state['found'];
-			}
-		}
+		);
 
 		$state['cursor'] = max( $state['cursor'], $cursor );
 		$state['done']  += max( 0, $count );
@@ -217,16 +225,22 @@ final class Scanner implements Service {
 
 		$limit = $this->config->batch_size();
 		$posts = $this->posts->after( $state['cursor'], $limit, $state['post_type'] );
-		foreach ( $posts as $post ) {
-			$server = array();
-			if ( $this->scan_post( $post, null, '', $server ) ) {
-				++$state['found'];
+		$this->issues->begin();
+		try {
+			foreach ( $posts as $post ) {
+				$server = array();
+				if ( $this->scan_post( $post, null, '', $server ) ) {
+					++$state['found'];
+				}
+				if ( $server ) {
+					$found[ (int) $post->ID ] = $server;
+				}
+				$state['cursor'] = (int) $post->ID;
+				++$state['done'];
 			}
-			if ( $server ) {
-				$found[ (int) $post->ID ] = $server;
-			}
-			$state['cursor'] = (int) $post->ID;
-			++$state['done'];
+		} finally {
+			// One write of the results index for the whole batch, not one per post.
+			$this->issues->commit();
 		}
 
 		if ( count( $posts ) < $limit ) {
