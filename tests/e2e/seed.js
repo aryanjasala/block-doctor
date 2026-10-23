@@ -66,16 +66,80 @@ const option = ( name ) => JSON.parse( wpEval( `echo wp_json_encode( get_option(
 /** How many revisions a post has. */
 const revisions = ( id ) => Number( wpEval( `echo count( wp_get_post_revisions( ${ id } ) );` ) );
 
+// A plugin block registered the usual way, from block.json with an editor script file, and a
+// block registered only in PHP (rendered on the server, no editor script at all).
+const SHELF = {
+	'acme-shelf/block.json': JSON.stringify( {
+		apiVersion: 3,
+		name: 'acme/shelf',
+		title: 'Shelf',
+		category: 'text',
+		attributes: { label: { type: 'string', source: 'html', selector: 'p' } },
+		editorScript: 'file:./index.js',
+	} ),
+	'acme-shelf/index.js':
+		"wp.blocks.registerBlockType( 'acme/shelf', { edit: function () { return null; }, save: function ( props ) { return wp.element.createElement( 'div', { className: 'acme-shelf' }, wp.element.createElement( 'p', null, props.attributes.label ) ); } } );",
+	'acme-shelf/index.asset.php': "<?php return array( 'dependencies' => array( 'wp-blocks', 'wp-element' ), 'version' => '1' );",
+	'acme-shelf.php': `<?php
+add_action( 'init', function () {
+	register_block_type( __DIR__ . '/acme-shelf' );
+	register_block_type( 'acme/clock', array( 'render_callback' => function () { return '<p>Open now</p>'; } ) );
+} );
+`,
+};
+
+// Counts the writes of Block Doctor's results index.
+const INDEX_COUNTER = `<?php
+function bdr_e2e_count_index_write() {
+	update_option( 'bdr_e2e_index_writes', (int) get_option( 'bdr_e2e_index_writes', 0 ) + 1, false );
+}
+add_action( 'add_option_block_doctor_index', 'bdr_e2e_count_index_write' );
+add_action( 'update_option_block_doctor_index', 'bdr_e2e_count_index_write' );
+add_action( 'delete_option_block_doctor_index', 'bdr_e2e_count_index_write' );
+`;
+
+// Every must-use file the tests write, so reset() can remove them.
+const MU_FILES = [ 'acme-notice.php', 'acme-shelf.php', 'acme-shelf/block.json', 'acme-shelf/index.js', 'acme-shelf/index.asset.php', 'bdr-index-counter.php' ];
+
+/**
+ * Writes files into wp-content/mu-plugins.
+ *
+ * @param {Object<string, string>} files Path inside mu-plugins => contents.
+ */
+function installMuFiles( files ) {
+	const php = Object.entries( files )
+		.map( ( [ file, text ] ) => `wp_mkdir_p( dirname( WPMU_PLUGIN_DIR . '/${ file }' ) ); file_put_contents( WPMU_PLUGIN_DIR . '/${ file }', base64_decode( '${ b64( text ) }' ) );` )
+		.join( ' ' );
+	wpEval( php );
+}
+
 /** Installs the must-use plugin with the JavaScript-only block. */
 function installNoticeBlock() {
-	wpEval( `wp_mkdir_p( WPMU_PLUGIN_DIR ); file_put_contents( WPMU_PLUGIN_DIR . '/acme-notice.php', base64_decode( '${ b64( MU_PLUGIN ) }' ) );` );
+	installMuFiles( { 'acme-notice.php': MU_PLUGIN } );
 }
+
+/** Installs the block.json block with an editor script, and the PHP-only block. */
+function installShelfBlocks() {
+	installMuFiles( SHELF );
+}
+
+/** Installs the counter of results index writes, and zeroes it. */
+function installIndexCounter() {
+	installMuFiles( { 'bdr-index-counter.php': INDEX_COUNTER } );
+	wpEval( "delete_option( 'bdr_e2e_index_writes' );" );
+}
+
+/** How many times the results index was written since installIndexCounter(). */
+const indexWrites = () => Number( wpEval( "echo (int) get_option( 'bdr_e2e_index_writes', 0 );" ) );
 
 /** Empties the site and forgets everything Block Doctor stored. */
 function reset() {
 	wp( 'site', 'empty', '--yes' );
 	const list = OPTIONS.map( ( name ) => `'${ name }'` ).join( ', ' );
-	wpEval( `foreach ( array( ${ list } ) as $o ) { delete_option( $o ); } wp_clear_scheduled_hook( 'block_doctor_server_scan' ); if ( file_exists( WPMU_PLUGIN_DIR . '/acme-notice.php' ) ) { unlink( WPMU_PLUGIN_DIR . '/acme-notice.php' ); }` );
+	const files = MU_FILES.map( ( name ) => `'${ name }'` ).join( ', ' );
+	wpEval(
+		`foreach ( array( ${ list }, 'bdr_e2e_index_writes' ) as $o ) { delete_option( $o ); } wp_clear_scheduled_hook( 'block_doctor_server_scan' ); foreach ( array( ${ files } ) as $f ) { if ( file_exists( WPMU_PLUGIN_DIR . '/' . $f ) ) { unlink( WPMU_PLUGIN_DIR . '/' . $f ); } } if ( is_dir( WPMU_PLUGIN_DIR . '/acme-shelf' ) ) { rmdir( WPMU_PLUGIN_DIR . '/acme-shelf' ); }`
+	);
 }
 
 /**
@@ -106,4 +170,4 @@ function seed() {
 	return ids;
 }
 
-module.exports = { MARKUP, OPTIONS, createPost, content, issues, option, revisions, installNoticeBlock, reset, seed };
+module.exports = { MARKUP, OPTIONS, createPost, content, issues, option, revisions, installNoticeBlock, installShelfBlocks, installIndexCounter, indexWrites, reset, seed };
