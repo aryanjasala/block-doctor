@@ -24,11 +24,12 @@
 
 	// Default messages. The screen passes translated ones.
 	const TEXT = {
-		invalid: 'Block contains unexpected or invalid content.',
+		invalid: 'The saved markup no longer matches what the block produces.',
 		missing: 'Block type %s is not registered. Its plugin may be inactive or deleted.',
 		classic: 'Classic content between blocks: "%s"',
 		classicWhole: 'The whole post is classic content, with no blocks.',
 		deprecated: 'Saved by an older version of the block. The markup changes the next time the post is saved.',
+		error: 'The scan could not read the blocks of this post, so they were not checked.',
 	};
 
 	/**
@@ -267,16 +268,29 @@
 	}
 
 	/**
+	 * The first words of a block, so people can find it in the post.
+	 *
+	 * @param {string} source Block markup.
+	 * @return {string} Text, or ''.
+	 */
+	function blockExcerpt( source ) {
+		return excerpt( stripDelimiters( source ), 60 );
+	}
+
+	/**
 	 * Parses a post and classifies every block.
 	 *
-	 * @param {string} content Post content.
-	 * @param {Object} blocks  wp.blocks.
-	 * @param {Object} options text: messages to use instead of the English defaults.
+	 * @param {string}   content              Post content.
+	 * @param {Object}   blocks               wp.blocks.
+	 * @param {Object}   options              Options.
+	 * @param {Object}   options.text         Messages to use instead of the English defaults.
+	 * @param {Function} options.isRegistered ( name ) => true for block types the server registry knows. Those are never reported as unregistered.
 	 * @return {{entries: Object[], issues: Object[], malformed: boolean}} Entries (node, block, path, kind, children) and the issues found.
 	 */
 	function analyse( content, blocks, options = {} ) {
 		content = String( content );
 		const text = Object.assign( {}, TEXT, options.text || {} );
+		const known = typeof options.isRegistered === 'function' ? options.isRegistered : () => false;
 		const missingName = typeof blocks.getUnregisteredTypeHandlerName === 'function' ? blocks.getUnregisteredTypeHandlerName() || 'core/missing' : 'core/missing';
 		const { nodes, malformed } = tokenize( content );
 		const named = nodes.some( ( node ) => node.name );
@@ -287,20 +301,29 @@
 			if ( ! block ) {
 				return entry;
 			}
+			const source = () => content.slice( node.start, node.end );
 
 			if ( block.name === missingName ) {
 				const name = ( block.attributes && block.attributes.originalName ) || node.name;
+				if ( known( name ) ) {
+					// Registered on the server, but its editor script did not load on this screen. It is not
+					// unregistered, and it cannot be validated here; the blocks inside it still can.
+					node.children.forEach( ( child, index ) => {
+						entry.children.push( visit( child, parseOne( blocks, content.slice( child.start, child.end ) ), path.concat( index ) ) );
+					} );
+					return entry;
+				}
 				entry.kind = 'missing';
-				entry.issue = { kind: 'missing', path, name, message: sprintf( text.missing, name ) };
+				entry.issue = { kind: 'missing', path, name, message: sprintf( text.missing, name ), detail: '', excerpt: blockExcerpt( source() ) };
 				issues.push( entry.issue );
 				return entry;
 			}
 			if ( block.isValid === false ) {
 				entry.kind = 'invalid';
-				entry.issue = { kind: 'invalid', path, name: block.name, message: validationMessage( block ) || text.invalid };
+				entry.issue = { kind: 'invalid', path, name: block.name, message: text.invalid, detail: validationMessage( block ), excerpt: blockExcerpt( source() ) };
 			} else if ( isOutdated( blocks, block ) ) {
 				entry.kind = 'deprecated';
-				entry.issue = { kind: 'deprecated', path, name: block.name, message: text.deprecated };
+				entry.issue = { kind: 'deprecated', path, name: block.name, message: text.deprecated, detail: '', excerpt: blockExcerpt( source() ) };
 			}
 			if ( entry.issue ) {
 				issues.push( entry.issue );
@@ -320,7 +343,7 @@
 			const path = [ index ];
 			if ( ! node.name ) {
 				const source = content.slice( node.start, node.end );
-				const issue = { kind: 'classic', path, name: 'core/freeform', message: named ? sprintf( text.classic, excerpt( source ) ) : text.classicWhole };
+				const issue = { kind: 'classic', path, name: 'core/freeform', message: named ? sprintf( text.classic, excerpt( source ) ) : text.classicWhole, detail: '', excerpt: excerpt( source ) };
 				issues.push( issue );
 				return { node, block: null, path, kind: 'classic', issue, zipped: false, children: [] };
 			}
@@ -343,6 +366,25 @@
 	}
 
 	/**
+	 * Finds the issues in a post, and reports a post the scan cannot read as an `error`
+	 * issue instead of throwing, so it is never stored as clean.
+	 *
+	 * @param {string} content Post content.
+	 * @param {Object} blocks  wp.blocks.
+	 * @param {Object} options text, isRegistered.
+	 * @return {Object[]} Issues.
+	 */
+	function scanPost( content, blocks, options = {} ) {
+		try {
+			return scan( content, blocks, options );
+		} catch ( error ) {
+			const text = Object.assign( {}, TEXT, options.text || {} );
+			const detail = String( ( error && error.message ) || error || '' ).replace( /\s+/g, ' ' ).trim();
+			return [ { kind: 'error', path: [ 0 ], name: '', message: text.error, detail: detail.length > 300 ? detail.slice( 0, 297 ) + '...' : detail, excerpt: '' } ];
+		}
+	}
+
+	/**
 	 * Repairs the chosen kinds of issues in a post and leaves every other byte alone.
 	 *
 	 * - invalid: rebuilt from its attributes and inner blocks, like Attempt Block
@@ -353,6 +395,10 @@
 	 *
 	 * A fixed block is saved again with everything inside it; blocks around it keep their exact markup.
 	 *
+	 * A block with no saved HTML, such as every dynamic block (`<!-- wp:acme/latest /-->`), is never
+	 * turned into Custom HTML: the result would be an empty block, and the block and its settings would
+	 * be gone. It is kept as it is and listed in `kept` with the reason `empty`.
+	 *
 	 * @param {string}   content          Post content.
 	 * @param {Object}   blocks           wp.blocks.
 	 * @param {Object}   options          Options.
@@ -361,7 +407,8 @@
 	 * @param {string}   options.strategy Strategy for block types not in strategies. Default 'recover'.
 	 * @param {Function} options.fixBlock ( result, block, context ) => block, blocks, markup string or null to keep it. The blockDoctor.fixBlock filter.
 	 * @param {Object}   options.text     Translated messages.
-	 * @return {{content: string, changed: boolean, fixed: Object[]}} New content and the issues fixed.
+	 * @param {Function} options.isRegistered Block types the server registry knows, see analyse().
+	 * @return {{content: string, changed: boolean, fixed: Object[], kept: Object[]}} New content, the issues fixed, and the issues left as they are with a `reason` (`empty` or `filter`).
 	 */
 	function repair( content, blocks, options = {} ) {
 		content = String( content );
@@ -372,6 +419,7 @@
 		const { entries } = analyse( content, blocks, options );
 		const replacements = [];
 		const fixed = [];
+		const kept = [];
 
 		const wants = ( entry ) => {
 			switch ( entry.kind ) {
@@ -422,22 +470,32 @@
 			const block = entry.block;
 			const strategy = entry.kind === 'invalid' ? strategyFor( block.name ) : '';
 			let result;
+			let reason = '';
 
 			if ( entry.kind === 'classic' ) {
 				result = blocks.rawHandler( { HTML: source } );
-			} else if ( entry.kind === 'missing' ) {
-				const html = block.attributes && typeof block.attributes.originalUndelimitedContent === 'string' ? block.attributes.originalUndelimitedContent : stripDelimiters( source );
-				result = htmlBlock( blocks, html );
-			} else if ( strategy === 'html' ) {
-				result = htmlBlock( blocks, stripDelimiters( source ) );
+			} else if ( entry.kind === 'missing' || strategy === 'html' ) {
+				const original = entry.kind === 'missing' && block.attributes && typeof block.attributes.originalUndelimitedContent === 'string' ? block.attributes.originalUndelimitedContent : stripDelimiters( source );
+				if ( original.trim() ) {
+					result = htmlBlock( blocks, entry.kind === 'missing' ? original : stripDelimiters( source ) );
+				} else {
+					// Nothing saved to keep: a Custom HTML block would be empty and the block lost.
+					result = null;
+					reason = 'empty';
+				}
 			} else {
 				result = blocks.createBlock( block.name, block.attributes, innerFor( entry ) );
 			}
 
 			if ( typeof options.fixBlock === 'function' ) {
-				result = options.fixBlock( result, block, { kind: entry.kind, strategy, source, path: entry.path } );
+				const filtered = options.fixBlock( result, block, { kind: entry.kind, strategy, source, path: entry.path, reason } );
+				if ( ( filtered === null || filtered === undefined || filtered === false ) && result ) {
+					reason = 'filter';
+				}
+				result = filtered;
 			}
 			if ( result === null || result === undefined || result === false ) {
+				kept.push( Object.assign( {}, entry.issue, { reason: reason || 'filter' } ) );
 				return null;
 			}
 			if ( typeof result === 'string' ) {
@@ -450,6 +508,8 @@
 			if ( wants( entry ) ) {
 				const result = fixedBlocks( entry );
 				if ( result === null ) {
+					// Kept as it is. Blocks inside it can still be fixed on their own.
+					entry.children.forEach( walk );
 					return;
 				}
 				const markup = typeof result === 'string' ? result : blocks.serialize( result );
@@ -471,7 +531,7 @@
 				output = output.slice( 0, start ) + markup + output.slice( end );
 			} );
 
-		return { content: output, changed: output !== content, fixed };
+		return { content: output, changed: output !== content, fixed, kept };
 	}
 
 	/**
@@ -597,5 +657,5 @@
 		return h ? `${ h }:${ pad( m ) }:${ pad( s ) }` : `${ m }:${ pad( s ) }`;
 	}
 
-	return { TEXT, sprintf, excerpt, tokenize, stripDelimiters, htmlBlock, validationMessage, isOutdated, analyse, scan, repair, diffableLines, diffLines, formatDuration };
+	return { TEXT, sprintf, excerpt, blockExcerpt, tokenize, stripDelimiters, htmlBlock, validationMessage, isOutdated, analyse, scan, scanPost, repair, diffableLines, diffLines, formatDuration };
 } );

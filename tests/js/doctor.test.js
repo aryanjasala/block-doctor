@@ -118,14 +118,90 @@ test( 'scan reports invalid, unregistered, classic and outdated blocks with path
 		]
 	);
 	assert.equal( issues[ 0 ].message, 'Classic content between blocks: "Old"' );
-	assert.equal( issues[ 1 ].message, 'Expected tag name `h3`, instead saw `h2`.', 'the specific message, not the generic one' );
 	assert.equal( issues[ 2 ].message, 'Block type acme/widget is not registered. Its plugin may be inactive or deleted.' );
+} );
+
+test( 'an invalid block gets a plain message, the validation message as its detail, and its first words', () => {
+	const issues = core.scan( `${ P() }
+
+${ P( '{"bad":true}', 'Opening <b>hours</b>' ) }`, stubBlocks(), { text: { invalid: 'Plain words.' } } );
+
+	assert.equal( issues.length, 1 );
+	assert.equal( issues[ 0 ].message, 'Plain words.', 'no developer message with backticks and JSON in the main text' );
+	assert.equal( issues[ 0 ].detail, 'Expected tag name `h3`, instead saw `h2`.', 'the specific message is kept as the technical detail' );
+	assert.equal( issues[ 0 ].excerpt, 'Opening hours' );
+	assert.equal( core.scan( P( '{"bad":true}' ), stubBlocks() )[ 0 ].message, core.TEXT.invalid );
+	assert.doesNotMatch( core.TEXT.invalid, /`/ );
+} );
+
+test( 'block types the server registry knows are never reported as unregistered, and blocks inside them are still checked', () => {
+	const content = `<!-- wp:acme/shelf {"ids":[1,2]} /-->\n\n<!-- wp:acme/box --><div>${ P( '{"bad":true}' ) }</div><!-- /wp:acme/box -->\n\n<!-- wp:acme/gone /-->`;
+	const isRegistered = ( name ) => name === 'acme/shelf' || name === 'acme/box';
+
+	// Without the server's list, every acme/* block is unregistered, as before.
+	assert.deepEqual(
+		core.scan( content, stubBlocks() ).map( ( issue ) => `${ issue.kind }@${ issue.path.join( '.' ) }` ),
+		[ 'missing@0', 'missing@1', 'missing@2' ]
+	);
+	assert.deepEqual(
+		core.scan( content, stubBlocks(), { isRegistered } ).map( ( issue ) => `${ issue.kind }@${ issue.path.join( '.' ) }:${ issue.name }` ),
+		[ 'invalid@1.0:core/paragraph', 'missing@2:acme/gone' ]
+	);
+
+	// So "Convert to Custom HTML" never touches them either.
+	const result = core.repair( content, stubBlocks(), { kinds: { missing: 'html' }, isRegistered } );
+	assert.ok( result.content.startsWith( '<!-- wp:acme/shelf {"ids":[1,2]} /-->\n\n<!-- wp:acme/box -->' ) );
+} );
+
+test( 'Convert to Custom HTML keeps blocks with no saved HTML instead of leaving an empty Custom HTML block', () => {
+	const dynamic = '<!-- wp:acme/shots {"ids":[4,5]} /-->';
+	const hollow = '<!-- wp:acme/latest {"count":3} --><!-- /wp:acme/latest -->';
+	const widget = '<!-- wp:acme/widget --><div class="w">W</div><!-- /wp:acme/widget -->';
+	const content = [ dynamic, hollow, widget ].join( '\n\n' );
+	const result = core.repair( content, stubBlocks(), { kinds: { missing: 'html' } } );
+
+	assert.equal( result.content, [ dynamic, hollow, '<!-- wp:html --><x><div class="w">W</div></x><!-- /wp:html -->' ].join( '\n\n' ) );
+	assert.doesNotMatch( result.content, /<!-- wp:html --><x><\/x>/ );
+	assert.deepEqual( result.fixed.map( ( issue ) => issue.name ), [ 'acme/widget' ] );
+	assert.deepEqual(
+		result.kept.map( ( issue ) => `${ issue.name }:${ issue.reason }` ),
+		[ 'acme/shots:empty', 'acme/latest:empty' ]
+	);
+
+	// Only dynamic blocks: nothing changes at all.
+	const only = core.repair( dynamic, stubBlocks(), { kinds: { missing: 'html' } } );
+	assert.deepEqual( { content: only.content, changed: only.changed, fixed: only.fixed.length }, { content: dynamic, changed: false, fixed: 0 } );
+
+	// The same for an invalid block repaired as Custom HTML when its markup has no HTML of its own.
+	const group = '<!-- wp:group {"bad":true} --><!-- wp:acme/shots /--><!-- /wp:group -->';
+	const invalid = core.repair( group, stubBlocks(), { kinds: { invalid: true }, strategy: 'html' } );
+	assert.equal( invalid.content, group );
+	assert.deepEqual( invalid.kept.map( ( issue ) => `${ issue.kind }:${ issue.reason }` ), [ 'invalid:empty' ] );
+
+	// A fixBlock filter sees why, and can still give its own repair.
+	const filtered = core.repair( dynamic, stubBlocks(), {
+		kinds: { missing: 'html' },
+		fixBlock: ( value, block, context ) => ( context.reason === 'empty' ? '<!-- wp:shortcode -->[shots ids="4,5"]<!-- /wp:shortcode -->' : value ),
+	} );
+	assert.equal( filtered.content, '<!-- wp:shortcode -->[shots ids="4,5"]<!-- /wp:shortcode -->' );
+	assert.deepEqual( filtered.kept, [] );
+} );
+
+test( 'scanPost reports a post it cannot read as an error issue instead of storing it as clean', () => {
+	const blocks = stubBlocks();
+	assert.deepEqual( core.scanPost( P( '{"bad":true}' ), blocks ), core.scan( P( '{"bad":true}' ), blocks ) );
+
+	blocks.parse = () => {
+		throw new TypeError( 'Cannot read properties of undefined (reading "attributes")' );
+	};
+	const issues = core.scanPost( P(), blocks, { text: { error: 'Not checked.' } } );
+	assert.deepEqual( issues, [ { kind: 'error', path: [ 0 ], name: '', message: 'Not checked.', detail: 'Cannot read properties of undefined (reading "attributes")', excerpt: '' } ] );
 } );
 
 test( 'scan says when a whole post is classic, and uses translated messages', () => {
 	const issues = core.scan( '<p>Just HTML</p>', stubBlocks(), { text: { classicWhole: 'Tout classique.' } } );
 
-	assert.deepEqual( issues, [ { kind: 'classic', path: [ 0 ], name: 'core/freeform', message: 'Tout classique.' } ] );
+	assert.deepEqual( issues, [ { kind: 'classic', path: [ 0 ], name: 'core/freeform', message: 'Tout classique.', detail: '', excerpt: 'Just HTML' } ] );
 	assert.deepEqual( core.scan( '', stubBlocks() ), [] );
 	assert.deepEqual( core.scan( P() + '\n\n' + P(), stubBlocks() ), [] );
 } );
@@ -271,7 +347,7 @@ test( 'repair with nothing to fix returns the content unchanged', () => {
 	const content = `${ P() }\n\n${ P( '{"bad":true}' ) }`;
 	const result = core.repair( content, stubBlocks(), { kinds: {} } );
 
-	assert.deepEqual( result, { content, changed: false, fixed: [] } );
+	assert.deepEqual( result, { content, changed: false, fixed: [], kept: [] } );
 } );
 
 test( 'diffLines shows removed then added lines, and folds unchanged runs', () => {
