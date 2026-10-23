@@ -1,6 +1,5 @@
 // End-to-end tests for Block Doctor. Every test checks the database through WP-CLI as well as the screen.
-const { test, expect, wp, wpEval, openEditor } = require( './utils' );
-const { BASE_URL } = require( './utils/config' );
+const { test, expect, wp, wpEval, openEditor, logInAs } = require( './utils' );
 const { MARKUP, createPost, content, issues, option, revisions, installShelfBlocks, installIndexCounter, indexWrites, reset, seed } = require( './seed' );
 
 const SCREEN = '/wp-admin/tools.php?page=block-doctor';
@@ -591,12 +590,8 @@ test.describe.serial( 'Block Doctor', () => {
 			// Not there yet.
 		}
 		wp( 'user', 'create', 'writer', 'writer@example.com', '--role=author', '--user_pass=password' );
-		const context = await browser.newContext( { baseURL: BASE_URL, storageState: { cookies: [], origins: [] } } );
-		const page = await context.newPage();
-		await page.goto( '/wp-login.php' );
-		await page.locator( '#user_login' ).fill( 'writer' );
-		await page.locator( '#user_pass' ).fill( 'password' );
-		await Promise.all( [ page.waitForURL( /wp-admin/ ), page.locator( '#wp-submit' ).click() ] );
+		const { context, page } = await logInAs( browser, 'writer', 'password' );
+		await expect( page ).toHaveURL( /wp-admin/ );
 
 		await page.goto( SCREEN );
 		await expect( page.locator( 'body' ) ).toContainText( 'Sorry, you are not allowed to access this page.' );
