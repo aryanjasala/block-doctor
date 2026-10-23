@@ -29,7 +29,7 @@ It scans posts, pages and every other post type that uses the block editor, plus
 Pick posts, or a whole kind of issue, and preview the fixes. Every post shows a diff of its markup, and nothing is saved until you apply them.
 
 * Invalid blocks are rebuilt from their settings, exactly like Attempt Block Recovery. Or turn one block type into Custom HTML blocks instead, with the markup kept as it is.
-* Unregistered blocks stay as they are, or become Custom HTML blocks.
+* Unregistered blocks stay as they are, or become Custom HTML blocks. Dynamic blocks have no saved HTML, so they always stay as they are.
 * Classic content is converted to blocks, like Convert to blocks. Only when you ask.
 * Outdated blocks are saved again with their current markup.
 
@@ -56,7 +56,7 @@ Only the block editor's JavaScript knows what each block saves, so only it can t
 
 = Does it find blocks from other plugins? =
 
-Yes. The screen fires the same `enqueue_block_editor_assets` hook as the post editor, so blocks that plugins register there are checked too. A block that only registers inside the post editor itself shows up as unregistered.
+Yes. The screen loads the editor scripts of every block registered in PHP, including the usual `block.json` blocks, and fires the same `enqueue_block_editor_assets` hook as the post editor, so blocks that plugins register there are checked too. A block type the server knows is never reported as unregistered. A block that only registers in JavaScript inside the post editor itself shows up as unregistered.
 
 = What can WP-CLI do without a browser? =
 
