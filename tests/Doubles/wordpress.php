@@ -66,15 +66,10 @@ if ( ! class_exists( 'WP_REST_Server' ) ) {
 
 if ( ! class_exists( 'BD_Test_Query' ) ) {
 	/**
-	 * A query whose variables can be read, for the posts_where filter.
+	 * A query whose variables can be read, for the posts_where filter. The
+	 * template stub's WP_Query already has query_vars and get().
 	 */
 	class BD_Test_Query extends WP_Query {
-		/** @var array */
-		public $query_vars = array();
-
-		public function get( $key ) {
-			return $this->query_vars[ $key ] ?? '';
-		}
 	}
 }
 

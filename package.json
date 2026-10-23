@@ -9,7 +9,7 @@
     "test:e2e": "playwright test",
     "screenshots": "SCREENSHOTS=1 playwright test screenshots",
     "demo": "DEMO=1 playwright test demo",
-    "test:unit:js": "node --test tests/js/"
+    "test:unit:js": "node --test tests/js/*.test.js"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1"
