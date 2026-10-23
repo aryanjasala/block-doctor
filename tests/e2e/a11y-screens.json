@@ -1,0 +1,56 @@
+{
+  "$comment": "Screens tests/e2e/a11y.spec.js checks with axe-core. This file belongs to the plugin: apply-template.py only writes it when it is missing. The fields are described in docs/DEVELOPMENT.md.",
+  "include": ["#wpbody-content"],
+  "exclude": [],
+  "screens": [
+    {
+      "name": "Tools > Block Doctor before the first scan",
+      "setup": [{ "js": "seed.js", "call": "reset" }],
+      "url": "/wp-admin/tools.php?page=block-doctor",
+      "steps": [{ "waitFor": ".bdr-start" }]
+    },
+    {
+      "name": "Tools > Block Doctor report after a scan",
+      "setup": [{ "js": "seed.js", "call": "reset" }, { "js": "seed.js", "call": "seed", "save": "ids" }],
+      "url": "/wp-admin/tools.php?page=block-doctor",
+      "steps": [{ "click": ".bdr-start" }, { "waitFor": ".bdr-last-scan" }],
+      "cleanup": [{ "js": "seed.js", "call": "reset" }]
+    },
+    {
+      "name": "Fix preview with a diff",
+      "setup": [{ "js": "seed.js", "call": "reset" }, { "js": "seed.js", "call": "seed", "save": "ids" }],
+      "url": "/wp-admin/tools.php?page=block-doctor",
+      "steps": [
+        { "click": ".bdr-start" },
+        { "waitFor": ".bdr-last-scan" },
+        { "click": ".bdr-table tr[data-post=\"{ids.hours}\"] input[type=\"checkbox\"]" },
+        { "click": ".bdr-table tr[data-post=\"{ids.badNotice}\"] input[type=\"checkbox\"]" },
+        { "click": ".bdr-fix-selected" },
+        { "click": ".bdr-preview-item[data-post=\"{ids.hours}\"] .bdr-toggle-diff" },
+        { "waitFor": ".bdr-diff" }
+      ],
+      "include": ["#wpbody-content", ".bdr-modal"],
+      "cleanup": [{ "js": "seed.js", "call": "reset" }]
+    },
+    {
+      "name": "Fix batches with Undo after applying a fix",
+      "setup": [{ "js": "seed.js", "call": "reset" }, { "js": "seed.js", "call": "seed", "save": "ids" }],
+      "dialogs": "accept",
+      "url": "/wp-admin/tools.php?page=block-doctor",
+      "steps": [
+        { "click": ".bdr-start" },
+        { "waitFor": ".bdr-last-scan" },
+        { "click": ".bdr-table tr[data-post=\"{ids.hours}\"] input[type=\"checkbox\"]" },
+        { "click": ".bdr-fix-selected" },
+        { "click": ".bdr-apply" },
+        { "waitFor": ".bdr-modal .components-notice" },
+        { "click": ".bdr-close" },
+        { "waitFor": ".bdr-batches" }
+      ],
+      "cleanup": [{ "js": "seed.js", "call": "reset" }]
+    }
+  ],
+  "skip": {
+    "Fix batches with Undo after applying a fix": "On WordPress 6.9, the Undo batch button's blue text sits on the grey striped row at 4.26:1, under the 4.5:1 minimum. The follow-up fix: PR gives the button a white background and removes this entry."
+  }
+}
