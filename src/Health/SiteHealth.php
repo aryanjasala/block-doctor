@@ -2,14 +2,14 @@
 /**
  * Site Health check.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Health;
+namespace AryanX\Axle\BlockDoctor\Health;
 
-use AryanX\BlockDoctor\Admin\Page;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Service;
+use AryanX\Axle\BlockDoctor\Admin\Page;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Service;
 
 defined( 'ABSPATH' ) || exit;
 

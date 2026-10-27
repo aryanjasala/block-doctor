@@ -2,16 +2,16 @@
 /**
  * Plugin bootstrap.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor;
+namespace AryanX\Axle\BlockDoctor;
 
-use AryanX\BlockDoctor\Admin\Dashboard;
-use AryanX\BlockDoctor\Admin\Page;
-use AryanX\BlockDoctor\Cli\Command;
-use AryanX\BlockDoctor\Health\SiteHealth;
-use AryanX\BlockDoctor\Rest\Controller;
+use AryanX\Axle\BlockDoctor\Admin\Dashboard;
+use AryanX\Axle\BlockDoctor\Admin\Page;
+use AryanX\Axle\BlockDoctor\Cli\Command;
+use AryanX\Axle\BlockDoctor\Health\SiteHealth;
+use AryanX\Axle\BlockDoctor\Rest\Controller;
 
 defined( 'ABSPATH' ) || exit;
 

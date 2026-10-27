@@ -2,14 +2,14 @@
 /**
  * Tests for the browser scan's progress and the server-side scan.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Checks;
-use AryanX\BlockDoctor\Issues;
-use AryanX\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Checks;
+use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Scanner;
 use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;

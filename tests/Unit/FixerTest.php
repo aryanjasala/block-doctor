@@ -2,14 +2,14 @@
 /**
  * Tests for saving fixes, the batches and Undo batch.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Batches;
-use AryanX\BlockDoctor\Fixer;
-use AryanX\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Batches;
+use AryanX\Axle\BlockDoctor\Fixer;
+use AryanX\Axle\BlockDoctor\Issues;
 use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
@@ -240,7 +240,7 @@ final class FixerTest extends PluginTestCase {
 	}
 
 	public function test_batches_count_up_and_expire_after_the_undo_window(): void {
-		$batches = new Batches( new \AryanX\BlockDoctor\Config() );
+		$batches = new Batches( new \AryanX\Axle\BlockDoctor\Config() );
 		$first   = $batches->create( array( 'invalid' ) );
 		$second  = $batches->create( array( 'classic' ) );
 

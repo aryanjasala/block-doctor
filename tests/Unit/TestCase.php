@@ -2,10 +2,10 @@
 /**
  * Base class for unit tests.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
 use Brain\Monkey;
 use Brain\Monkey\Functions;

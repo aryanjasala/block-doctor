@@ -3,19 +3,19 @@
  * Base class for Block Doctor's unit tests: a small site with posts, post meta
  * and revisions kept in memory.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Batches;
-use AryanX\BlockDoctor\Checks;
-use AryanX\BlockDoctor\Config;
-use AryanX\BlockDoctor\Fixer;
-use AryanX\BlockDoctor\Issues;
-use AryanX\BlockDoctor\Posts;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Batches;
+use AryanX\Axle\BlockDoctor\Checks;
+use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Fixer;
+use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Posts;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Scanner;
 use Brain\Monkey\Functions;
 
 require_once dirname( __DIR__ ) . '/Doubles/wordpress.php';

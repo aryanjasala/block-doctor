@@ -315,7 +315,7 @@ test.describe.serial( 'Block Doctor', () => {
 		await expect( widget ).toContainText( '5 Invalid, in 4 posts' );
 		await expect( widget.getByRole( 'link', { name: 'Open Block Doctor' } ) ).toHaveAttribute( 'href', /tools\.php\?page=block-doctor/ );
 
-		const health = JSON.parse( wpEval( `$t = new AryanX\\BlockDoctor\\Health\\SiteHealth( AryanX\\BlockDoctor\\Plugin::instance()->report() ); echo wp_json_encode( $t->run() );` ) );
+		const health = JSON.parse( wpEval( `$t = new AryanX\\Axle\\BlockDoctor\\Health\\SiteHealth( AryanX\\Axle\\BlockDoctor\\Plugin::instance()->report() ); echo wp_json_encode( $t->run() );` ) );
 		expect( health.status ).toBe( 'recommended' );
 		expect( health.label ).toMatch( /^7 posts have invalid or broken blocks \(last scan / );
 

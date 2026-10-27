@@ -2,10 +2,10 @@
 /**
  * Saving fixes and undoing them.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor;
+namespace AryanX\Axle\BlockDoctor;
 
 defined( 'ABSPATH' ) || exit;
 

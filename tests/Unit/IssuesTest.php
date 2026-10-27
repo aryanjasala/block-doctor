@@ -2,13 +2,13 @@
 /**
  * Tests for storing, merging, counting and listing issues.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Config;
-use AryanX\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Issues;
 use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
 

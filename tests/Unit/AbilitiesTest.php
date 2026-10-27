@@ -2,12 +2,12 @@
 /**
  * Tests for the abilities.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Abilities;
+use AryanX\Axle\BlockDoctor\Abilities;
 use Brain\Monkey\Functions;
 
 final class AbilitiesTest extends PluginTestCase {

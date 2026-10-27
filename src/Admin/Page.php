@@ -2,16 +2,16 @@
 /**
  * Tools > Block Doctor.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Admin;
+namespace AryanX\Axle\BlockDoctor\Admin;
 
-use AryanX\BlockDoctor\Config;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Service;
-use const AryanX\BlockDoctor\PLUGIN_FILE;
-use const AryanX\BlockDoctor\VERSION;
+use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Service;
+use const AryanX\Axle\BlockDoctor\PLUGIN_FILE;
+use const AryanX\Axle\BlockDoctor\VERSION;
 
 defined( 'ABSPATH' ) || exit;
 

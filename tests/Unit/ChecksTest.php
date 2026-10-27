@@ -2,12 +2,12 @@
 /**
  * Tests for the server-side checks.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Checks;
+use AryanX\Axle\BlockDoctor\Checks;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 

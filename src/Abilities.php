@@ -2,10 +2,10 @@
 /**
  * Abilities: scan results, the server-side scan and Undo batch for AI agents and other Abilities API clients.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor;
+namespace AryanX\Axle\BlockDoctor;
 
 defined( 'ABSPATH' ) || exit;
 

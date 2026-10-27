@@ -78,7 +78,7 @@ add_filter( 'block_doctor_issue_kinds', function ( $kinds ) {
 add_filter( 'block_doctor_server_checks', function ( $checks ) {
 	$checks['shortcode'] = function ( WP_Post $post, array $blocks ) {
 		$issues = array();
-		AryanX\BlockDoctor\Checks::walk( $blocks, function ( $block, $path ) use ( &$issues ) {
+		AryanX\Axle\BlockDoctor\Checks::walk( $blocks, function ( $block, $path ) use ( &$issues ) {
 			if ( 'core/paragraph' === $block['blockName'] && preg_match( '/\[[a-z_]+/', $block['innerHTML'] ) ) {
 				$issues[] = array( 'kind' => 'shortcode', 'path' => $path, 'name' => 'core/paragraph', 'message' => 'Shortcode in a paragraph.' );
 			}
@@ -165,7 +165,7 @@ The screen uses these routes under `/block-doctor/v1/`, all behind the Block Doc
 ## PHP API
 
 ```php
-$plugin = AryanX\BlockDoctor\Plugin::instance();
+$plugin = AryanX\Axle\BlockDoctor\Plugin::instance();
 
 $plugin->scanner()->scan_post( get_post( 42 ) ); // run the server checks on one post and store them
 $plugin->scanner()->start_server( 'page', true ); // a server scan of every page, in the background

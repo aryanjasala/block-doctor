@@ -2,17 +2,17 @@
 /**
  * `wp block-doctor` commands.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Cli;
+namespace AryanX\Axle\BlockDoctor\Cli;
 
-use AryanX\BlockDoctor\Batches;
-use AryanX\BlockDoctor\Config;
-use AryanX\BlockDoctor\Fixer;
-use AryanX\BlockDoctor\Issues;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Batches;
+use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Fixer;
+use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Scanner;
 
 defined( 'ABSPATH' ) || exit;
 
