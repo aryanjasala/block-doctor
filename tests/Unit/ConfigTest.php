@@ -2,12 +2,12 @@
 /**
  * Tests for the defaults and their filters.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Config;
 use Brain\Monkey\Filters;
 
 final class ConfigTest extends PluginTestCase {

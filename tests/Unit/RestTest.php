@@ -2,12 +2,12 @@
 /**
  * Tests for the REST routes.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Rest\Controller;
+use AryanX\Axle\BlockDoctor\Rest\Controller;
 use Brain\Monkey\Functions;
 
 final class RestTest extends PluginTestCase {

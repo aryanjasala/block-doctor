@@ -2,13 +2,13 @@
 /**
  * Tests for the bootstrap.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Plugin;
-use AryanX\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Plugin;
+use AryanX\Axle\BlockDoctor\Scanner;
 
 final class PluginTest extends PluginTestCase {
 
@@ -28,7 +28,7 @@ final class PluginTest extends PluginTestCase {
 		$this->assertSame( 'idle', $plugin->scanner()->state( 'browser' )['status'] );
 		$this->assertSame( array(), $plugin->batches()->all() );
 		$this->assertSame( 0, $plugin->report()->summary()['posts'] );
-		$this->assertInstanceOf( \AryanX\BlockDoctor\Fixer::class, $plugin->fixer() );
+		$this->assertInstanceOf( \AryanX\Axle\BlockDoctor\Fixer::class, $plugin->fixer() );
 	}
 
 	public function test_deactivation_stops_a_background_scan(): void {

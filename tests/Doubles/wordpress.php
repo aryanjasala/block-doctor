@@ -3,7 +3,7 @@
  * Stand-ins for the WordPress classes Block Doctor works with. The shared stubs
  * in tests/Stubs come from the repo template; these are this plugin's own.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
 // phpcs:ignoreFile
@@ -85,5 +85,5 @@ if ( ! class_exists( 'BD_Test_Query' ) ) {
 }
 
 // The main plugin file defines these; the tests do not load it.
-defined( 'AryanX\BlockDoctor\VERSION' ) || define( 'AryanX\BlockDoctor\VERSION', '1.0.0' );
-defined( 'AryanX\BlockDoctor\PLUGIN_FILE' ) || define( 'AryanX\BlockDoctor\PLUGIN_FILE', dirname( __DIR__, 2 ) . '/block-doctor.php' );
+defined( 'AryanX\Axle\BlockDoctor\VERSION' ) || define( 'AryanX\Axle\BlockDoctor\VERSION', '1.0.0' );
+defined( 'AryanX\Axle\BlockDoctor\PLUGIN_FILE' ) || define( 'AryanX\Axle\BlockDoctor\PLUGIN_FILE', dirname( __DIR__, 2 ) . '/block-doctor.php' );

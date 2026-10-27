@@ -2,10 +2,10 @@
 /**
  * Contract for classes that hook into WordPress.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor;
+namespace AryanX\Axle\BlockDoctor;
 
 defined( 'ABSPATH' ) || exit;
 

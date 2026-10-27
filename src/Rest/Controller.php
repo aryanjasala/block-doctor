@@ -2,19 +2,19 @@
 /**
  * REST routes for Tools > Block Doctor.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Rest;
+namespace AryanX\Axle\BlockDoctor\Rest;
 
-use AryanX\BlockDoctor\Batches;
-use AryanX\BlockDoctor\Config;
-use AryanX\BlockDoctor\Fixer;
-use AryanX\BlockDoctor\Issues;
-use AryanX\BlockDoctor\Posts;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Scanner;
-use AryanX\BlockDoctor\Service;
+use AryanX\Axle\BlockDoctor\Batches;
+use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Fixer;
+use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Posts;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Service;
 
 defined( 'ABSPATH' ) || exit;
 

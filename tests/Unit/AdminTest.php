@@ -2,16 +2,16 @@
 /**
  * Tests for the screen, the CSV, the dashboard widget, Site Health and the report.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Tests\Unit;
+namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
-use AryanX\BlockDoctor\Admin\Dashboard;
-use AryanX\BlockDoctor\Admin\Page;
-use AryanX\BlockDoctor\Health\SiteHealth;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Admin\Dashboard;
+use AryanX\Axle\BlockDoctor\Admin\Page;
+use AryanX\Axle\BlockDoctor\Health\SiteHealth;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Scanner;
 use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;

@@ -2,14 +2,14 @@
 /**
  * Dashboard widget.
  *
- * @package AryanX\BlockDoctor
+ * @package AryanX\Axle\BlockDoctor
  */
 
-namespace AryanX\BlockDoctor\Admin;
+namespace AryanX\Axle\BlockDoctor\Admin;
 
-use AryanX\BlockDoctor\Config;
-use AryanX\BlockDoctor\Report;
-use AryanX\BlockDoctor\Service;
+use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Report;
+use AryanX\Axle\BlockDoctor\Service;
 
 defined( 'ABSPATH' ) || exit;
 
