@@ -132,7 +132,7 @@
 
 .bdr-group-more summary,
 .bdr-detail summary {
-	color: var(--axle-accent);
+	color: var(--axle-info-text);
 	cursor: pointer;
 	margin-top: 2px;
 }
