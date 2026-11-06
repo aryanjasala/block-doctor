@@ -134,7 +134,8 @@ final class Page implements Service {
 		);
 		wp_add_inline_script( 'block-doctor-admin', 'window.blockDoctorData = ' . wp_json_encode( $this->data() ) . ';', 'before' );
 		wp_set_script_translations( 'block-doctor-admin', 'block-doctor' );
-		wp_enqueue_style( 'block-doctor', $url . 'admin.css', array( 'wp-components' ), VERSION );
+		AxleUi::enqueue();
+		wp_enqueue_style( 'block-doctor', $url . 'admin.css', array( 'wp-components', AxleUi::HANDLE ), VERSION );
 	}
 
 	/**
@@ -190,13 +191,15 @@ final class Page implements Service {
 			wp_die( esc_html__( 'Sorry, you are not allowed to use Block Doctor.', 'block-doctor' ), 403 );
 		}
 		?>
-		<div class="wrap bdr-wrap">
-			<h1><?php esc_html_e( 'Block Doctor', 'block-doctor' ); ?></h1>
-			<p class="bdr-intro"><?php esc_html_e( 'Finds blocks the editor would flag as invalid, block types no plugin registers any more, classic content and broken references, in every post, page, pattern and template. Fixes are previewed first, saved as revisions, and a whole batch can be undone.', 'block-doctor' ); ?></p>
+		<div class="wrap axle-ui bdr-wrap">
+			<h1 class="wp-heading-inline"><?php esc_html_e( 'Block Doctor', 'block-doctor' ); ?></h1>
+			<hr class="wp-header-end">
+			<p class="axle-intro bdr-intro"><?php esc_html_e( 'Finds blocks the editor would flag as invalid, block types no plugin registers any more, classic content and broken references, in every post, page, pattern and template. Fixes are previewed first, saved as revisions, and a whole batch can be undone.', 'block-doctor' ); ?></p>
 			<div id="bdr-app">
 				<p class="bdr-loading"><?php esc_html_e( 'Loading the block types...', 'block-doctor' ); ?></p>
 				<noscript><p><?php esc_html_e( 'Block Doctor needs JavaScript: block validation only exists in the block editor\'s scripts.', 'block-doctor' ); ?></p></noscript>
 			</div>
+			<?php AxleUi::footer(); ?>
 		</div>
 		<?php
 	}
