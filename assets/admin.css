@@ -1,25 +1,7 @@
-/* Tools > Block Doctor */
+/* Tools > Block Doctor. Layout only: components, tones and colours come from axle-ui.css. */
 
 .bdr-wrap {
 	max-width: 1200px;
-}
-
-.bdr-intro {
-	max-width: 780px;
-	font-size: 14px;
-}
-
-.bdr-panel {
-	background: #fff;
-	border: 1px solid #c3c4c7;
-	border-radius: 4px;
-	margin: 16px 0;
-	padding: 4px 20px 16px;
-}
-
-.bdr-panel h2 {
-	font-size: 1.3em;
-	margin: 1em 0 0.6em;
 }
 
 .bdr-actions {
@@ -38,68 +20,40 @@
 }
 
 .bdr-progress {
-	background: #f0f0f1;
+	background: var(--axle-neutral-bg);
 	border-radius: 4px;
 	height: 10px;
 	overflow: hidden;
 }
 
 .bdr-progress-bar {
-	background: var(--wp-admin-theme-color, #2271b1);
+	background: var(--axle-accent);
 	height: 100%;
 	transition: width 0.3s ease;
 }
 
 .bdr-progress-label {
-	color: #50575e;
+	color: var(--axle-neutral-text);
 	margin: 6px 0 0;
 }
 
 .bdr-tabs {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	margin-bottom: 12px;
+	margin-bottom: 16px;
 }
 
-.bdr-tab {
-	background: #f6f7f7;
-	border: 1px solid #c3c4c7;
-	border-radius: 16px;
-	color: #1d2327;
+/* The filters are buttons, so they need the font and cursor a link would have. */
+.bdr-tabs .nav-tab {
 	cursor: pointer;
-	font-size: 13px;
-	padding: 4px 12px;
+	font-family: inherit;
 }
 
-.bdr-tab:hover {
-	border-color: #8c8f94;
-}
-
-.bdr-tab.is-active {
-	background: #1d2327;
-	border-color: #1d2327;
-	color: #fff;
-}
-
-.bdr-count {
-	background: rgba(0, 0, 0, 0.08);
-	border-radius: 9px;
-	display: inline-block;
-	font-size: 11px;
-	line-height: 18px;
-	min-width: 18px;
-	padding: 0 5px;
-	text-align: center;
-}
-
-.bdr-tab.is-active .bdr-count {
-	background: rgba(255, 255, 255, 0.2);
+.bdr-tabs .bdr-count {
+	margin-left: 4px;
 }
 
 .bdr-fix-options {
 	align-items: center;
-	border: 1px solid #dcdcde;
+	border: 1px solid var(--axle-border);
 	border-radius: 4px;
 	display: flex;
 	flex-wrap: wrap;
@@ -143,12 +97,12 @@
 }
 
 .bdr-meta {
-	color: #646970;
+	color: var(--axle-muted);
 	margin-top: 2px;
 }
 
 .bdr-stale {
-	color: #996800;
+	color: var(--axle-warning-text);
 	margin-top: 4px;
 }
 
@@ -178,7 +132,7 @@
 
 .bdr-group-more summary,
 .bdr-detail summary {
-	color: #2271b1;
+	color: var(--axle-accent);
 	cursor: pointer;
 	margin-top: 2px;
 }
@@ -189,7 +143,7 @@
 }
 
 .bdr-slug {
-	color: #50575e;
+	color: var(--axle-neutral-text);
 	margin-right: 4px;
 }
 
@@ -198,7 +152,7 @@
 }
 
 .bdr-position {
-	color: #50575e;
+	color: var(--axle-neutral-text);
 }
 
 .bdr-position::before {
@@ -210,13 +164,13 @@
 }
 
 .bdr-message {
-	color: #3c434a;
+	color: inherit;
 	display: block;
 	margin-top: 2px;
 }
 
 .bdr-detail-text {
-	color: #50575e;
+	color: var(--axle-neutral-text);
 	display: block;
 	font-size: 12px;
 	margin-top: 2px;
@@ -224,7 +178,7 @@
 }
 
 .bdr-kept {
-	color: #50575e;
+	color: var(--axle-neutral-text);
 	margin: 6px 0 0;
 }
 
@@ -241,66 +195,11 @@
 	text-transform: none;
 }
 
-.bdr-badge {
-	background: #f0f0f1;
-	border-radius: 3px;
-	color: #1d2327;
-	display: inline-block;
-	font-size: 11px;
-	font-weight: 600;
-	line-height: 18px;
-	margin-right: 4px;
-	padding: 0 6px;
-}
-
-.bdr-badge-invalid {
-	background: #fcf0f1;
-	color: #8a2424;
-}
-
-.bdr-badge-missing {
-	background: #fcf0f1;
-	color: #8a2424;
-}
-
-.bdr-badge-classic {
-	background: #f0f6fc;
-	color: #0a4b78;
-}
-
-.bdr-badge-deprecated {
-	background: #fcf9e8;
-	color: #6e4f00;
-}
-
-.bdr-badge-empty,
-.bdr-badge-pattern-ref,
-.bdr-badge-navigation-ref,
-.bdr-badge-missing-media,
-.bdr-badge-error {
-	background: #fef1e7;
-	color: #7a3b00;
-}
-
 .bdr-pages {
 	align-items: center;
 	display: flex;
 	gap: 10px;
 	margin-top: 12px;
-}
-
-.bdr-undone {
-	color: #646970;
-}
-
-/* Secondary buttons have no background of their own. On the grey rows of a
-   striped table their text drops under 4.5:1 with the older admin blue. */
-.bdr-panel .striped .components-button.is-secondary {
-	background: #fff;
-}
-
-.bdr-notice {
-	margin: 16px 0;
 }
 
 /* Preview */
@@ -311,7 +210,7 @@
 }
 
 .bdr-strategies {
-	border-bottom: 1px solid #dcdcde;
+	border-bottom: 1px solid var(--axle-border);
 	margin-bottom: 12px;
 	padding-bottom: 12px;
 }
@@ -336,7 +235,7 @@
 }
 
 .bdr-preview-item {
-	border: 1px solid #dcdcde;
+	border: 1px solid var(--axle-border);
 	border-radius: 4px;
 	margin: 0 0 8px;
 	padding: 8px 12px;
@@ -358,11 +257,11 @@
 }
 
 .bdr-left {
-	color: #996800;
+	color: var(--axle-warning-text);
 }
 
 .bdr-diff {
-	background: #f6f7f7;
+	background: var(--axle-neutral-bg);
 	border-radius: 3px;
 	font-family: Menlo, Consolas, monospace;
 	font-size: 12px;
@@ -380,28 +279,28 @@
 }
 
 .bdr-diff-sign {
-	color: #646970;
+	color: var(--axle-muted);
 	display: inline-block;
 	width: 1.4em;
 }
 
 .bdr-diff-del {
-	background: #fcf0f1;
-	color: #8a2424;
+	background: var(--axle-error-bg);
+	color: var(--axle-error-text);
 }
 
 .bdr-diff-add {
-	background: #edfaef;
-	color: #005c12;
+	background: var(--axle-good-bg);
+	color: var(--axle-good-text);
 }
 
 .bdr-diff-gap {
-	color: #646970;
+	color: var(--axle-muted);
 	font-style: italic;
 }
 
 .bdr-modal-footer {
-	border-top: 1px solid #dcdcde;
+	border-top: 1px solid var(--axle-border);
 	display: flex;
 	gap: 8px;
 	justify-content: flex-end;
@@ -410,7 +309,7 @@
 }
 
 .bdr-errors {
-	color: #8a2424;
+	color: var(--axle-error-text);
 }
 
 /* Dashboard widget */
