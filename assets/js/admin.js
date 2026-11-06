@@ -186,8 +186,11 @@
 		);
 	}
 
+	// Every kind of issue maps onto one of the Axle tones.
+	const KIND_TONES = { invalid: 'error', missing: 'error', error: 'error', classic: 'info', deprecated: 'warning' };
+
 	function KindBadge( { kind } ) {
-		return el( 'span', { className: 'bdr-badge bdr-badge-' + kind }, kindInfo( kind ).label );
+		return el( 'span', { className: 'axle-badge axle-badge--' + ( KIND_TONES[ kind ] || 'warning' ) + ' bdr-badge' }, kindInfo( kind ).label );
 	}
 
 	function Diff( { before, after } ) {
@@ -505,7 +508,7 @@
 			Modal,
 			{
 				title: __( 'Preview fixes', 'block-doctor' ),
-				className: 'bdr-modal',
+				className: 'axle-ui bdr-modal',
 				onRequestClose: phase === 'saving' ? () => {} : phase === 'done' ? () => onDone( applied.batch, false ) : onClose,
 				shouldCloseOnClickOutside: false,
 			},
@@ -608,8 +611,8 @@
 
 		return el(
 			'div',
-			{ className: 'bdr-panel bdr-scan', 'data-status': running ? 'running' : state.status },
-			el( 'h2', null, __( 'Scan', 'block-doctor' ) ),
+			{ className: 'axle-card bdr-panel bdr-scan', 'data-status': running ? 'running' : state.status },
+			el( 'h2', { className: 'axle-card__title' }, __( 'Scan', 'block-doctor' ) ),
 			state.status === 'done' && ! running
 				? el(
 						'p',
@@ -646,7 +649,7 @@
 							el( Button, { variant: 'primary', className: 'bdr-resume', onClick: () => run( false ) }, __( 'Resume scan', 'block-doctor' ) ),
 							el( Button, { variant: 'secondary', className: 'bdr-restart', onClick: () => run( true ) }, __( 'Start over', 'block-doctor' ) )
 					  )
-					: el( Button, { variant: 'primary', className: 'bdr-start', onClick: () => run( true ) }, state.status === 'done' ? __( 'Scan again', 'block-doctor' ) : __( 'Scan site', 'block-doctor' ) ),
+					: el( Button, { variant: state.status === 'done' ? 'secondary' : 'primary', className: 'bdr-start', onClick: () => run( true ) }, state.status === 'done' ? __( 'Scan again', 'block-doctor' ) : __( 'Scan site', 'block-doctor' ) ),
 				running ? el( Spinner ) : null
 			)
 		);
@@ -839,18 +842,18 @@
 
 		return el(
 			'div',
-			{ className: 'bdr-panel bdr-report' },
-			el( 'h2', null, __( 'Report', 'block-doctor' ) ),
+			{ className: 'axle-card bdr-panel bdr-report' },
+			el( 'h2', { className: 'axle-card__title' }, __( 'Report', 'block-doctor' ) ),
 			el(
 				'div',
-				{ className: 'bdr-tabs', role: 'group', 'aria-label': __( 'Show the posts with one kind of issue', 'block-doctor' ) },
+				{ className: 'nav-tab-wrapper bdr-tabs', role: 'group', 'aria-label': __( 'Show the posts with one kind of issue', 'block-doctor' ) },
 				[ { key: '', label: __( 'All', 'block-doctor' ) } ].concat( tabs ).map( ( kind ) =>
 					el(
 						'button',
 						{
 							key: kind.key,
 							type: 'button',
-							className: 'bdr-tab' + ( tab === kind.key ? ' is-active' : '' ),
+							className: 'nav-tab bdr-tab' + ( tab === kind.key ? ' nav-tab-active is-active' : '' ),
 							'aria-pressed': tab === kind.key,
 							'data-kind': kind.key || 'all',
 							title: kind.description || '',
@@ -862,12 +865,12 @@
 						kind.label,
 						' ',
 						// Every pill counts posts, like the table below it.
-						el( 'span', { className: 'bdr-count' }, kind.key ? counts[ kind.key ].posts : summary.posts )
+						el( 'span', { className: 'axle-badge axle-badge--neutral bdr-count' }, kind.key ? counts[ kind.key ].posts : summary.posts )
 					)
 				)
 			),
 			! items.length
-				? el( 'p', { className: 'bdr-empty' }, summary.posts ? __( 'Nothing of this kind.', 'block-doctor' ) : __( 'No issues found. Every block is healthy.', 'block-doctor' ) )
+				? el( 'div', { className: 'axle-empty' }, el( 'p', { className: 'bdr-empty' }, summary.posts ? __( 'Nothing of this kind.', 'block-doctor' ) : __( 'No issues found. Every block is healthy.', 'block-doctor' ) ) )
 				: el(
 						Fragment,
 						null,
@@ -1004,8 +1007,8 @@
 
 		return el(
 			'div',
-			{ className: 'bdr-panel bdr-batches' },
-			el( 'h2', null, __( 'Fix batches', 'block-doctor' ) ),
+			{ className: 'axle-card bdr-panel bdr-batches' },
+			el( 'h2', { className: 'axle-card__title' }, __( 'Fix batches', 'block-doctor' ) ),
 			el(
 				'p',
 				{ className: 'description' },
