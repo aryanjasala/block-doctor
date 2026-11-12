@@ -374,6 +374,7 @@
 /* Older admin colour schemes give link-style buttons a blue that falls under 4.5:1 on the tinted notice and confirm backgrounds. */
 .bdr-wrap .components-button.is-link,
 .bdr-wrap .components-button.is-tertiary,
+.bdr-wrap .axle-empty .components-button.is-secondary,
 .bdr-wrap .components-notice__action.is-secondary {
 	color: var(--axle-info-text);
 }
