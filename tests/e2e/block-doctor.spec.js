@@ -136,10 +136,18 @@ test.describe.serial( 'Block Doctor', () => {
 		await expect( page.locator( '.block-editor-warning' ) ).toHaveCount( 0 );
 		await expect( page.frameLocator( 'iframe[name="editor-canvas"]' ).locator( '.block-editor-warning' ) ).toHaveCount( 0 );
 
-		// Undo batch.
-		page.on( 'dialog', ( dialog ) => dialog.accept() );
+		// Undo batch: a step in place says what will change before anything does, and Cancel changes nothing.
 		await page.goto( SCREEN );
 		await page.locator( '.bdr-batches tr[data-batch="1"] .bdr-undo' ).click();
+		const confirm = page.locator( '.bdr-batches .axle-confirm' );
+		await expect( confirm ).toBeFocused();
+		await expect( confirm ).toContainText( 'Batch #1 puts its 3 posts back to their content before the fix.' );
+		await confirm.getByRole( 'button', { name: 'Cancel' } ).click();
+		await expect( confirm ).toHaveCount( 0 );
+		await expect( page.locator( '.bdr-batches tr[data-batch="1"] .bdr-undo' ) ).toBeFocused();
+		expect( content( ids.hours ) ).toContain( MARKUP.goodHeading );
+		await page.locator( '.bdr-batches tr[data-batch="1"] .bdr-undo' ).click();
+		await page.locator( '.bdr-batches .bdr-confirm-yes' ).click();
 		await expect( page.locator( '.bdr-notice' ) ).toContainText( 'Batch #1 undone: 3 posts restored.' );
 		await expect( page.locator( '.bdr-batches tr[data-batch="1"] .bdr-undone' ) ).toBeVisible();
 		expect( content( ids.hours ) ).toBe( before.hours );
@@ -154,9 +162,9 @@ test.describe.serial( 'Block Doctor', () => {
 		await fixSelected( page, [ ids.hours, ids.nested ] );
 		wpEval( `wp_update_post( array( 'ID' => ${ ids.nested }, 'post_content' => 'Edited by hand' ) );` );
 
-		page.on( 'dialog', ( dialog ) => dialog.accept() );
 		await page.goto( SCREEN );
 		await page.locator( '.bdr-batches .bdr-undo' ).first().click();
+		await page.locator( '.bdr-batches .bdr-confirm-yes' ).click();
 		await expect( page.locator( '.bdr-notice' ) ).toContainText( '1 post restored.' );
 		await expect( page.locator( '.bdr-notice' ) ).toContainText( `#${ ids.nested } (edited after the fix)` );
 
@@ -315,9 +323,10 @@ test.describe.serial( 'Block Doctor', () => {
 		await expect( widget ).toContainText( '5 Invalid, in 4 posts' );
 		await expect( widget.getByRole( 'link', { name: 'Open Block Doctor' } ) ).toHaveAttribute( 'href', /tools\.php\?page=block-doctor/ );
 
-		const health = JSON.parse( wpEval( `$t = new AryanX\\Axle\\BlockDoctor\\Health\\SiteHealth( AryanX\\Axle\\BlockDoctor\\Plugin::instance()->report() ); echo wp_json_encode( $t->run() );` ) );
+		const health = JSON.parse( wpEval( `$t = new AryanX\\Axle\\BlockDoctor\\Health\\SiteHealth( AryanX\\Axle\\BlockDoctor\\Plugin::instance()->report(), AryanX\\Axle\\BlockDoctor\\Plugin::instance()->usage(), AryanX\\Axle\\BlockDoctor\\Plugin::instance()->deactivation() ); echo wp_json_encode( $t->run() );` ) );
 		expect( health.status ).toBe( 'recommended' );
-		expect( health.label ).toMatch( /^7 posts have invalid or broken blocks \(last scan / );
+		expect( health.label ).toBe( '7 posts have invalid or broken blocks' );
+		expect( health.description ).toContain( 'class="axle-time"' );
 
 		await page.goto( '/wp-admin/site-health.php' );
 		await expect( page.getByText( /7 posts have invalid or broken blocks/ ) ).toBeVisible( { timeout: 20_000 } );
@@ -481,12 +490,14 @@ test.describe.serial( 'Block Doctor', () => {
 			wp( 'option', 'update', 'time_format', 'H:i' );
 			wp( 'option', 'update', 'timezone_string', 'Pacific/Kiritimati' );
 			await scanSite( page );
+			// A time reads as "5 minutes ago", and the exact time in the site's format and zone is in its title.
 			const finished = wpEval( "echo wp_date( 'Y-m-d H:i', get_option( 'block_doctor_scan' )['finished'] );" );
-			await expect( page.locator( '.bdr-last-scan' ) ).toContainText( `Last scan: ${ finished },` );
+			await expect( page.locator( '.bdr-last-scan time.axle-time' ) ).toHaveText( /ago|Just now/ );
+			await expect( page.locator( '.bdr-last-scan time.axle-time' ) ).toHaveAttribute( 'title', finished );
 
 			await fixSelected( page, [ ids.hours ] );
 			const time = wpEval( "$b = get_option( 'block_doctor_batches' ); echo wp_date( 'Y-m-d H:i', $b['items'][1]['time'] );" );
-			await expect( page.locator( '.bdr-batches tr[data-batch="1"] td' ).nth( 1 ) ).toHaveText( time );
+			await expect( page.locator( '.bdr-batches tr[data-batch="1"] td' ).nth( 1 ).locator( 'time' ) ).toHaveAttribute( 'title', time );
 		} finally {
 			for ( const [ name, value ] of Object.entries( saved ) ) {
 				wp( 'option', 'update', name, value );
@@ -502,8 +513,8 @@ test.describe.serial( 'Block Doctor', () => {
 		await scanSite( page );
 
 		// Status labels, not slugs.
-		await expect( row( page, ids.hours ).locator( '.bdr-meta' ) ).toHaveText( 'Post · Published' );
-		await expect( row( page, secret ).locator( '.bdr-meta' ) ).toHaveText( 'Post · Private' );
+		await expect( row( page, ids.hours ).locator( '.bdr-meta' ).first() ).toHaveText( 'Post · Published' );
+		await expect( row( page, secret ).locator( '.bdr-meta' ).first() ).toHaveText( 'Post · Private' );
 
 		// The block title, with the name second, its first words and where it is.
 		const hours = row( page, ids.hours );
@@ -604,5 +615,64 @@ test.describe.serial( 'Block Doctor', () => {
 
 		await context.close();
 		wp( 'user', 'delete', 'writer', '--yes' );
+	} );
+	test( 'the Get started card marks its steps from real data and can be dismissed for good', async ( { page } ) => {
+		reset();
+		await page.goto( SCREEN );
+		const card = page.locator( '.bdr-start-card' );
+		await expect( card ).toBeVisible();
+		await expect( card.locator( '.axle-step' ) ).toHaveCount( 3 );
+		await expect( card.locator( '.axle-step[data-step="scan"]' ) ).toHaveAttribute( 'data-done', 'false' );
+		await expect( page.locator( '.bdr-no-batches' ) ).toContainText( 'No fixes yet.' );
+
+		// The scan step is done once a scan has run.
+		seed();
+		await scanSite( page );
+		await page.reload();
+		await expect( card.locator( '.axle-step[data-step="scan"] .axle-badge--good' ) ).toHaveText( 'Done' );
+		await expect( card.locator( '.axle-step[data-step="fix"]' ) ).toHaveAttribute( 'data-done', 'false' );
+
+		await card.getByRole( 'button', { name: 'Dismiss' } ).click();
+		await expect( card ).toHaveCount( 0 );
+		expect( wpEval( "echo get_user_meta( 1, 'block_doctor_steps_dismissed', true );" ) ).toBe( '1' );
+		await page.reload();
+		await expect( page.locator( '.bdr-scan' ) ).toBeVisible();
+		await expect( card ).toHaveCount( 0 );
+	} );
+
+	test( 'Clear results asks in place, says what stays, and Cancel keeps everything', async ( { page } ) => {
+		await scanSite( page );
+		const clear = page.locator( '.bdr-clear' );
+		await clear.click();
+		const confirm = page.locator( '.bdr-report .axle-confirm' );
+		await expect( confirm ).toBeFocused();
+		await expect( confirm ).toContainText( 'Posts you fixed stay fixed, and fix batches stay' );
+		await page.keyboard.press( 'Escape' );
+		await expect( confirm ).toHaveCount( 0 );
+		await expect( clear ).toBeFocused();
+		expect( option( 'block_doctor_index' ) ).not.toBeNull();
+
+		await clear.click();
+		await confirm.getByRole( 'button', { name: 'Delete the stored results' } ).click();
+		await expect( page.locator( '.bdr-notice' ) ).toContainText( 'The stored results are deleted.' );
+		expect( option( 'block_doctor_index' ) ).toBeNull();
+	} );
+
+	test( 'a failed report load says what to do, and Try again loads it', async ( { page } ) => {
+		await scanSite( page );
+		let fail = true;
+		await page.route( /rest_route=%2Fblock-doctor%2Fv1%2Fissues|block-doctor\/v1\/issues/, async ( route ) => {
+			if ( fail ) {
+				await route.fulfill( { status: 500, contentType: 'application/json', body: JSON.stringify( { code: 'boom', message: 'The server stumbled.' } ) } );
+			} else {
+				await route.continue();
+			}
+		} );
+		await page.locator( '.bdr-tab[data-kind="invalid"]' ).click();
+		const error = page.locator( '.bdr-report .bdr-load-error' );
+		await expect( error ).toContainText( 'The server stumbled. Check your connection, then try again.' );
+		fail = false;
+		await error.getByRole( 'button', { name: 'Try again' } ).click();
+		await expect( page.locator( '.bdr-table' ) ).toBeVisible();
 	} );
 } );

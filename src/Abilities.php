@@ -63,22 +63,40 @@ final class Abilities implements Service {
 	private Posts $posts;
 
 	/**
+	 * The block usage index.
+	 *
+	 * @var Usage
+	 */
+	private Usage $usage;
+
+	/**
+	 * Where each block type comes from.
+	 *
+	 * @var Providers
+	 */
+	private Providers $providers;
+
+	/**
 	 * Sets up the abilities.
 	 *
-	 * @param Config  $config  Defaults and limits.
-	 * @param Posts   $posts   Finds the posts.
-	 * @param Issues  $issues  Stored results.
-	 * @param Scanner $scanner Scans.
-	 * @param Fixer   $fixer   Undo.
-	 * @param Report  $report  The report.
+	 * @param Config    $config    Defaults and limits.
+	 * @param Posts     $posts     Finds the posts.
+	 * @param Issues    $issues    Stored results.
+	 * @param Scanner   $scanner   Scans.
+	 * @param Fixer     $fixer     Undo.
+	 * @param Report    $report    The report.
+	 * @param Usage     $usage     The block usage index.
+	 * @param Providers $providers Where each block type comes from.
 	 */
-	public function __construct( Config $config, Posts $posts, Issues $issues, Scanner $scanner, Fixer $fixer, Report $report ) {
-		$this->config  = $config;
-		$this->posts   = $posts;
-		$this->issues  = $issues;
-		$this->scanner = $scanner;
-		$this->fixer   = $fixer;
-		$this->report  = $report;
+	public function __construct( Config $config, Posts $posts, Issues $issues, Scanner $scanner, Fixer $fixer, Report $report, Usage $usage, Providers $providers ) {
+		$this->config    = $config;
+		$this->posts     = $posts;
+		$this->issues    = $issues;
+		$this->scanner   = $scanner;
+		$this->fixer     = $fixer;
+		$this->report    = $report;
+		$this->usage     = $usage;
+		$this->providers = $providers;
 	}
 
 	/**
@@ -105,7 +123,7 @@ final class Abilities implements Service {
 			self::CATEGORY,
 			array(
 				'label'       => __( 'Block Doctor', 'block-doctor' ),
-				'description' => __( 'Find invalid, unregistered and broken blocks across the site, and undo a batch of fixes.', 'block-doctor' ),
+				'description' => __( 'Find invalid, unregistered and broken blocks across the site, see where each block type is used, and undo a batch of fixes.', 'block-doctor' ),
 			)
 		);
 	}
@@ -284,6 +302,123 @@ final class Abilities implements Service {
 			)
 		);
 
+		$provider = array(
+			'type'       => 'object',
+			'properties' => array(
+				'type'     => array(
+					'type' => 'string',
+					'enum' => array( 'core', 'plugin', 'mu-plugin', 'theme', 'unknown' ),
+				),
+				'slug'     => array( 'type' => 'string' ),
+				'name'     => array( 'type' => 'string' ),
+				'basename' => array( 'type' => 'string' ),
+			),
+		);
+
+		$this->ability(
+			'get-block-usage',
+			__( 'Get block usage', 'block-doctor' ),
+			__( 'Which block types the site uses, who provides each one (core, a plugin, a theme, or unknown), how many posts use it and how many times. Give block to get the posts that use one block type, with the position of the block in each post, or provider (such as plugin:acme/acme.php) for the posts that use any block of one plugin or theme. Covers posts, pages, other post types, synced patterns, templates and template parts you may edit. Read ready first: false means the index is still being built.', 'block-doctor' ),
+			array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'block'    => array( 'type' => 'string' ),
+					'provider' => array( 'type' => 'string' ),
+					'filter'   => array(
+						'type' => 'string',
+						'enum' => array( 'core', 'plugin', 'theme', 'unregistered', 'unused' ),
+					),
+					'search'   => array( 'type' => 'string' ),
+					'page'     => array(
+						'type'    => 'integer',
+						'minimum' => 1,
+						'default' => 1,
+					),
+					'per_page' => array(
+						'type'    => 'integer',
+						'minimum' => 1,
+						'maximum' => 100,
+						'default' => 20,
+					),
+				),
+				'additionalProperties' => false,
+				'default'              => array(),
+			),
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'ready'  => array( 'type' => 'boolean' ),
+					'total'  => array( 'type' => 'integer' ),
+					'blocks' => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'name'       => array( 'type' => 'string' ),
+								'title'      => array( 'type' => 'string' ),
+								'provider'   => $provider,
+								'registered' => array( 'type' => 'boolean' ),
+								'posts'      => array( 'type' => 'integer' ),
+								'uses'       => array( 'type' => 'integer' ),
+								'last'       => array( 'type' => 'integer' ),
+							),
+						),
+					),
+					'posts'  => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'id'        => array( 'type' => 'integer' ),
+								'title'     => array( 'type' => 'string' ),
+								'type'      => array( 'type' => 'string' ),
+								'status'    => array( 'type' => 'string' ),
+								'edit_link' => array( 'type' => 'string' ),
+								'uses'      => array( 'type' => 'integer' ),
+								'positions' => array(
+									'type'  => 'array',
+									'items' => array(
+										'type'  => 'array',
+										'items' => array( 'type' => 'integer' ),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+			array( $this, 'get_block_usage' ),
+			array(
+				'readonly'   => true,
+				'idempotent' => true,
+			)
+		);
+
+		$this->ability(
+			'run-usage-index',
+			__( 'Build the block usage index', 'block-doctor' ),
+			__( 'Counts the blocks of every post, so get-block-usage has numbers. It does the first batch now and the rest in the background with WP-Cron, and it changes no post. The index keeps itself current after that, whenever a post is saved or deleted. Read get-block-usage for ready.', 'block-doctor' ),
+			array(),
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'ready'  => array( 'type' => 'boolean' ),
+					'status' => array(
+						'type' => 'string',
+						'enum' => array( 'idle', 'running', 'done' ),
+					),
+					'done'   => array( 'type' => 'integer' ),
+					'total'  => array( 'type' => 'integer' ),
+				),
+			),
+			array( $this, 'run_usage_index' ),
+			array(
+				'readonly'    => false,
+				'destructive' => false,
+				'idempotent'  => true,
+			)
+		);
+
 		$this->ability(
 			'undo-batch',
 			__( 'Undo a batch of fixes', 'block-doctor' ),
@@ -357,6 +492,8 @@ final class Abilities implements Service {
 			'post_id'   => (int) ( $input['post_id'] ?? 0 ),
 			'page'      => max( 1, (int) ( $input['page'] ?? 1 ) ),
 			'per_page'  => max( 1, min( 100, (int) ( $input['per_page'] ?? 20 ) ) ),
+			// Only posts the current user may edit.
+			'editable'  => true,
 		);
 		$found = $this->issues->find( $args );
 		$items = array();
@@ -406,6 +543,87 @@ final class Abilities implements Service {
 		return array(
 			'state'  => $state,
 			'issues' => array(),
+		);
+	}
+
+	/**
+	 * Ability: block usage.
+	 *
+	 * @param array|null $input Ability input.
+	 * @return array
+	 */
+	public function get_block_usage( $input = null ): array {
+		$input    = (array) $input;
+		$types    = $this->usage->visible_types();
+		$page     = max( 1, (int) ( $input['page'] ?? 1 ) );
+		$per_page = max( 1, min( 100, (int) ( $input['per_page'] ?? 20 ) ) );
+		$block    = Issues::block_name( (string) ( $input['block'] ?? '' ) );
+		$provider = sanitize_text_field( (string) ( $input['provider'] ?? '' ) );
+		$result   = array(
+			'ready'  => $this->usage->ready(),
+			'total'  => 0,
+			'blocks' => array(),
+			'posts'  => array(),
+		);
+
+		if ( '' !== $block || '' !== $provider ) {
+			$names = '' !== $block ? array( $block ) : $this->providers->blocks_of( $provider );
+			$found = $this->usage->posts_using( $names, $types, $page, $per_page );
+			foreach ( $found['items'] as $item ) {
+				$post = get_post( $item['id'] );
+				if ( ! $post || ! current_user_can( 'edit_post', $post->ID ) ) {
+					continue;
+				}
+				$result['posts'][] = array(
+					'id'        => (int) $post->ID,
+					'title'     => '' !== $post->post_title ? (string) $post->post_title : (string) $post->post_name,
+					'type'      => (string) $post->post_type,
+					'status'    => (string) $post->post_status,
+					'edit_link' => (string) get_edit_post_link( $post->ID, 'raw' ),
+					'uses'      => $item['uses'],
+					'positions' => '' !== $block ? $this->usage->positions( $post, $block, $this->config->usage_positions() ) : array(),
+				);
+			}
+			$result['total'] = $found['total'];
+
+			return $result;
+		}
+
+		$rows            = $this->usage->blocks(
+			array(
+				'types'  => $types,
+				'search' => sanitize_text_field( (string) ( $input['search'] ?? '' ) ),
+				'filter' => sanitize_key( (string) ( $input['filter'] ?? '' ) ),
+			)
+		);
+		$result['total'] = count( $rows );
+		foreach ( array_slice( $rows, ( $page - 1 ) * $per_page, $per_page ) as $row ) {
+			$result['blocks'][] = $row;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Ability: build the block usage index.
+	 *
+	 * @return array
+	 */
+	public function run_usage_index(): array {
+		$state = $this->usage->state();
+		if ( 'running' !== $state['status'] ) {
+			$this->usage->start();
+		}
+		$state = $this->usage->step();
+		if ( 'running' === $state['status'] ) {
+			wp_schedule_single_event( time(), Usage::CRON );
+		}
+
+		return array(
+			'ready'  => $this->usage->ready(),
+			'status' => $state['status'],
+			'done'   => $state['done'],
+			'total'  => $state['total'],
 		);
 	}
 

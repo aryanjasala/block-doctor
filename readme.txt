@@ -8,7 +8,7 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Finds every invalid and broken block on the site and fixes them in bulk. You see a diff first, and a whole batch undoes in one click.
+Fixes invalid and broken blocks site-wide, in bulk, with a diff first and Undo. Shows which posts use each block before you switch a plugin off.
 
 == Description ==
 
@@ -39,13 +39,23 @@ Each fix saves the post, so there is a revision from before and after. A run of 
 
 The scan can pause, and picks up where it stopped, even after a reload. It shows how many posts are left and about how long it takes.
 
+= Where is each block used? =
+
+The **Block usage** tab on the same screen lists every block type on the site: who provides it (WordPress, a plugin, a theme, or unknown), how many posts use it, how often and when it was last used. Search it, filter it to blocks from plugins, blocks nothing registers any more, or blocks that are registered and never used. Choose a block to see its posts, with where the block sits in each. Download the list as CSV.
+
+= Before you switch a plugin off =
+
+Deactivate or Delete a plugin that provides blocks, and Block Doctor shows a step first on the Plugins screen: "Its 3 block types are used in 212 posts", with the most affected posts and a link to the full list. You continue or cancel. Nothing is ever blocked, and WP-CLI only prints a warning line. After a bulk deactivate or a theme switch, a notice and a Site Health check link to the posts that lost their blocks, so you can fix them with the tools above.
+
+The counts come from an index that builds itself in the background the first time, and stays current as posts are saved.
+
 Free and open source under the GPL. No pro version, no upsells, no ads in wp-admin, no tracking. And it stays that way.
 
 = For developers and AI agents =
 
 * Filters for every default, limit and list, and actions when a scan starts and finishes, issues are found, a post is fixed and a batch is undone. JavaScript filters and actions too, to skip posts or repair a block your own way. See the reference on GitHub.
-* WP-CLI: `wp block-doctor scan`, `report`, `batches`, `undo-batch` and `clear`.
-* On WordPress 6.9 and later, abilities let AI agents read the results, run the server-side scan and undo a batch.
+* WP-CLI: `wp block-doctor scan`, `report`, `usage`, `batches`, `undo-batch` and `clear`.
+* On WordPress 6.9 and later, abilities let AI agents read the results and the block usage, run the server-side scan and undo a batch.
 * A CSV download of every issue, a dashboard widget with the counts, and a Site Health check that says how many posts have broken blocks.
 
 == Frequently Asked Questions ==
@@ -60,7 +70,15 @@ Yes. The screen loads the editor scripts of every block registered in PHP, inclu
 
 = What can WP-CLI do without a browser? =
 
-`wp block-doctor scan` runs the server-side checks: unregistered blocks, classic content, emptied posts and references to deleted patterns, menus and media. Invalid markup needs the browser scan. `wp block-doctor report`, `batches`, `undo-batch` and `clear` work on the stored results.
+`wp block-doctor scan` runs the server-side checks: unregistered blocks, classic content, emptied posts and references to deleted patterns, menus and media. Invalid markup needs the browser scan. `wp block-doctor report`, `batches`, `undo-batch` and `clear` work on the stored results, and `wp block-doctor usage` lists block types and the posts that use them.
+
+= How does it know which plugin provides a block? =
+
+From facts. A block registered in PHP is traced through its scripts, its stylesheets and the file of its render callback. A block that only exists in JavaScript is traced through the script that registered it, which the browser scan notes: run Scan site once. When nothing can be traced, the block says Unknown. Block Doctor remembers what it found, so a block keeps its plugin after that plugin is off.
+
+= Will it stop me from deactivating a plugin? =
+
+No. The step on the Plugins screen has Continue and Cancel, and if the check fails you can still continue. WP-CLI deactivation prints one warning line and goes ahead. A bulk deactivate gives a notice afterwards.
 
 = Can I undo a fix much later? =
 
@@ -68,7 +86,7 @@ For 30 days, with Undo batch. After that the batch is forgotten, and the revisio
 
 = Does it store anything about people? =
 
-No. It stores the issues of each post in post meta, the progress of the last scan and the list of fix batches. Uninstalling removes all of it. Fixed posts stay fixed.
+No. It stores the issues of each post and a count of the block types it uses in post meta, the progress of the scans, the list of fix batches, which plugin provides each block, and whether you hid the Get started card. Uninstalling removes all of it. Fixed posts stay fixed.
 
 == Screenshots ==
 
@@ -76,6 +94,8 @@ No. It stores the issues of each post in post meta, the progress of the last sca
 2. The preview: a diff for every post, and a choice per block type between recovering the block and keeping it as Custom HTML.
 3. A scan in progress, with how many posts are left and about how long it takes.
 4. Fix batches, each with Undo batch.
+5. The Block usage tab: every block type, who provides it, and the posts that use it, with the position of the block in each.
+6. The step on the Plugins screen before a plugin whose blocks posts use is switched off.
 
 == Changelog ==
 

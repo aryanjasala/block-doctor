@@ -77,6 +77,27 @@ final class Plugin {
 	private Posts $posts;
 
 	/**
+	 * Where each block type comes from.
+	 *
+	 * @var Providers
+	 */
+	private Providers $providers;
+
+	/**
+	 * The block usage index.
+	 *
+	 * @var Usage
+	 */
+	private Usage $usage;
+
+	/**
+	 * Warnings before a plugin that provides blocks is turned off.
+	 *
+	 * @var Deactivation
+	 */
+	private Deactivation $deactivation;
+
+	/**
 	 * Starts the plugin. Runs on `plugins_loaded`.
 	 */
 	public static function boot(): void {
@@ -100,6 +121,7 @@ final class Plugin {
 	 */
 	public static function deactivate(): void {
 		wp_clear_scheduled_hook( Scanner::CRON );
+		wp_clear_scheduled_hook( Usage::CRON );
 	}
 
 	/**
@@ -113,6 +135,10 @@ final class Plugin {
 		$this->batches = new Batches( $this->config );
 		$this->fixer   = new Fixer( $this->posts, $this->issues, $this->batches, $this->scanner );
 		$this->report  = new Report( $this->config, $this->issues, $this->scanner );
+
+		$this->providers    = new Providers();
+		$this->usage        = new Usage( $this->config, $this->posts, $this->providers );
+		$this->deactivation = new Deactivation( $this->config, $this->usage, $this->providers );
 	}
 
 	/**
@@ -170,17 +196,46 @@ final class Plugin {
 	}
 
 	/**
+	 * Where each block type comes from.
+	 *
+	 * @return Providers
+	 */
+	public function providers(): Providers {
+		return $this->providers;
+	}
+
+	/**
+	 * The block usage index.
+	 *
+	 * @return Usage
+	 */
+	public function usage(): Usage {
+		return $this->usage;
+	}
+
+	/**
+	 * Warnings before a plugin that provides blocks is turned off.
+	 *
+	 * @return Deactivation
+	 */
+	public function deactivation(): Deactivation {
+		return $this->deactivation;
+	}
+
+	/**
 	 * Registers the services.
 	 */
 	private function register(): void {
 		$services = array(
 			$this->issues,
 			$this->scanner,
-			new Controller( $this->config, $this->posts, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report ),
-			new Page( $this->config, $this->report ),
+			$this->usage,
+			$this->deactivation,
+			new Controller( $this->config, $this->posts, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report, $this->usage, $this->providers, $this->deactivation ),
+			new Page( $this->config, $this->report, $this->usage ),
 			new Dashboard( $this->config, $this->report ),
-			new SiteHealth( $this->report ),
-			new Abilities( $this->config, $this->posts, $this->issues, $this->scanner, $this->fixer, $this->report ),
+			new SiteHealth( $this->report, $this->usage, $this->deactivation ),
+			new Abilities( $this->config, $this->posts, $this->issues, $this->scanner, $this->fixer, $this->report, $this->usage, $this->providers ),
 		);
 
 		foreach ( $services as $service ) {
@@ -188,7 +243,7 @@ final class Plugin {
 		}
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			\WP_CLI::add_command( 'block-doctor', new Command( $this->config, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report ) );
+			\WP_CLI::add_command( 'block-doctor', new Command( $this->config, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report, $this->usage, $this->providers ) );
 		}
 	}
 }

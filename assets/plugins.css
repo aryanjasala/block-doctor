@@ -1,0 +1,24 @@
+/* The step before Deactivate and Delete on the Plugins screen. Layout only: the component comes from axle-ui.css. */
+
+.block-doctor-warning-row td {
+	padding: 0 16px 16px;
+}
+
+.block-doctor-warning-row .axle-confirm {
+	margin: 0;
+}
+
+.block-doctor-warning-row ul {
+	list-style: disc;
+	margin: 8px 0 8px 20px;
+}
+
+.block-doctor-warning-row .spinner {
+	float: none;
+	margin: 0 4px;
+}
+
+/* Links inside a sentence are not told apart by colour alone. */
+.block-doctor-warning-row .axle-confirm a {
+	text-decoration: underline;
+}

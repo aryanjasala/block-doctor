@@ -97,16 +97,8 @@ final class Dashboard implements Service {
 		}
 
 		if ( $summary['last_scan'] ) {
-			printf(
-				'<p class="description">%s</p>',
-				esc_html(
-					sprintf(
-						/* translators: %s: date and time. */
-						__( 'Last scan: %s', 'block-doctor' ),
-						wp_date( (string) get_option( 'date_format' ) . ' ' . (string) get_option( 'time_format' ), $summary['last_scan'] )
-					)
-				)
-			);
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- relative_time() returns escaped HTML.
+			echo '<p class="description">' . esc_html__( 'Last scan:', 'block-doctor' ) . ' ' . AxleUi::relative_time( (int) $summary['last_scan'] ) . '</p>';
 		}
 		printf( '<p><a href="%s">%s</a></p>', esc_url( Page::url() ), esc_html__( 'Open Block Doctor', 'block-doctor' ) );
 	}

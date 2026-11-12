@@ -11,8 +11,10 @@ use AryanX\Axle\BlockDoctor\Batches;
 use AryanX\Axle\BlockDoctor\Config;
 use AryanX\Axle\BlockDoctor\Fixer;
 use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Providers;
 use AryanX\Axle\BlockDoctor\Report;
 use AryanX\Axle\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Usage;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -68,22 +70,40 @@ final class Command {
 	private Report $report;
 
 	/**
+	 * The block usage index.
+	 *
+	 * @var Usage
+	 */
+	private Usage $usage;
+
+	/**
+	 * Where each block type comes from.
+	 *
+	 * @var Providers
+	 */
+	private Providers $providers;
+
+	/**
 	 * Sets up the command.
 	 *
-	 * @param Config  $config  Defaults and limits.
-	 * @param Issues  $issues  Stored results.
-	 * @param Scanner $scanner Scans.
-	 * @param Batches $batches Fix batches.
-	 * @param Fixer   $fixer   Undo.
-	 * @param Report  $report  The report.
+	 * @param Config    $config    Defaults and limits.
+	 * @param Issues    $issues    Stored results.
+	 * @param Scanner   $scanner   Scans.
+	 * @param Batches   $batches   Fix batches.
+	 * @param Fixer     $fixer     Undo.
+	 * @param Report    $report    The report.
+	 * @param Usage     $usage     The block usage index.
+	 * @param Providers $providers Where each block type comes from.
 	 */
-	public function __construct( Config $config, Issues $issues, Scanner $scanner, Batches $batches, Fixer $fixer, Report $report ) {
-		$this->config  = $config;
-		$this->issues  = $issues;
-		$this->scanner = $scanner;
-		$this->batches = $batches;
-		$this->fixer   = $fixer;
-		$this->report  = $report;
+	public function __construct( Config $config, Issues $issues, Scanner $scanner, Batches $batches, Fixer $fixer, Report $report, Usage $usage, Providers $providers ) {
+		$this->config    = $config;
+		$this->issues    = $issues;
+		$this->scanner   = $scanner;
+		$this->batches   = $batches;
+		$this->fixer     = $fixer;
+		$this->report    = $report;
+		$this->usage     = $usage;
+		$this->providers = $providers;
 	}
 
 	/**
@@ -192,6 +212,120 @@ final class Command {
 			)
 		);
 		\WP_CLI\Utils\format_items( (string) ( $assoc_args['format'] ?? 'table' ), $lines, array( 'post_id', 'title', 'post_type', 'kind', 'block', 'path', 'message', 'source', 'changed_since_scan' ) );
+	}
+
+	/**
+	 * Lists every block type with its provider, posts and uses, or the posts that use one block type.
+	 *
+	 * Counts come from the block usage index, which builds itself in the
+	 * background on the site and is built here first when it never was. With
+	 * --block or --provider the command lists posts instead of block types.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--block=<name>]
+	 * : List the posts that use this block type, with the position of the block in each post.
+	 *
+	 * [--provider=<key>]
+	 * : Only block types of one plugin or theme, such as plugin:acme/acme.php or theme:twentytwentyfive. With no --block, lists the posts that use any of them.
+	 *
+	 * [--filter=<filter>]
+	 * : Only core, plugin, theme, unregistered (used but not registered) or unused (registered, not used) block types.
+	 *
+	 * [--search=<text>]
+	 * : Only block types whose name, title or provider contains this text.
+	 *
+	 * [--reindex]
+	 * : Count the blocks of every post again first.
+	 *
+	 * [--format=<format>]
+	 * : table, csv, json, yaml or count.
+	 * ---
+	 * default: table
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp block-doctor usage
+	 *     wp block-doctor usage --filter=unregistered
+	 *     wp block-doctor usage --block=acme/gallery --format=csv
+	 *     wp block-doctor usage --provider=plugin:acme/acme.php
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Named arguments.
+	 */
+	public function usage( array $args, array $assoc_args ): void {
+		$format   = (string) ( $assoc_args['format'] ?? 'table' );
+		$block    = Issues::block_name( (string) ( $assoc_args['block'] ?? '' ) );
+		$provider = (string) ( $assoc_args['provider'] ?? '' );
+		$filter   = (string) ( $assoc_args['filter'] ?? '' );
+		if ( '' !== $filter && ! in_array( $filter, array( 'core', 'plugin', 'theme', 'unregistered', 'unused' ), true ) ) {
+			\WP_CLI::error( sprintf( 'Unknown filter "%s". Filters: core, plugin, theme, unregistered, unused.', $filter ) );
+		}
+
+		if ( ! empty( $assoc_args['reindex'] ) || ! $this->usage->ready() ) {
+			$state = $this->usage->start();
+			while ( 'running' === $state['status'] ) {
+				$state = $this->usage->step();
+				if ( 'table' === $format && 0 === $state['done'] % ( 10 * $this->config->batch_size() ) ) {
+					\WP_CLI::log( sprintf( 'Counted the blocks of %d of %d posts...', $state['done'], $state['total'] ) );
+				}
+			}
+			if ( 'table' === $format ) {
+				\WP_CLI::log( sprintf( 'Counted the blocks of %d posts.', $state['done'] ) );
+			}
+		}
+
+		if ( '' !== $block || '' !== $provider ) {
+			$names = '' !== $block ? array( $block ) : $this->providers->blocks_of( $provider );
+			if ( '' !== $provider && ! $names ) {
+				\WP_CLI::error( sprintf( 'No block types are known for "%s". Keys look like plugin:acme/acme.php or theme:twentytwentyfive.', $provider ) );
+			}
+			$lines = array();
+			$page  = 1;
+			$more  = true;
+			while ( $more ) {
+				$found = $this->usage->posts_using( $names, null, $page, 100 );
+				foreach ( $found['items'] as $item ) {
+					$post = get_post( $item['id'] );
+					if ( ! $post ) {
+						continue;
+					}
+					$lines[] = array(
+						'post_id'   => $post->ID,
+						'title'     => $post->post_title,
+						'post_type' => $post->post_type,
+						'status'    => $post->post_status,
+						'uses'      => $item['uses'],
+						'positions' => '' !== $block ? implode( ' ', array_map( static fn( array $path ): string => implode( '.', $path ), $this->usage->positions( $post, $block, $this->config->usage_positions() ) ) ) : '',
+					);
+				}
+				++$page;
+				$more = 100 === count( $found['items'] );
+			}
+			\WP_CLI\Utils\format_items( $format, $lines, array( 'post_id', 'title', 'post_type', 'status', 'uses', 'positions' ) );
+			return;
+		}
+
+		$lines = array();
+		foreach ( $this->usage->blocks(
+			array(
+				'search' => (string) ( $assoc_args['search'] ?? '' ),
+				'filter' => $filter,
+			)
+		) as $row ) {
+			$lines[] = array(
+				'block'      => $row['name'],
+				'title'      => $row['title'],
+				'provider'   => '' !== $row['provider']['name'] ? $row['provider']['name'] : 'unknown',
+				'type'       => $row['provider']['type'],
+				'registered' => $row['registered'] ? 'yes' : 'no',
+				'posts'      => $row['posts'],
+				'uses'       => $row['uses'],
+				'last_used'  => $row['last'] ? gmdate( 'Y-m-d H:i:s', $row['last'] ) : '',
+			);
+		}
+		\WP_CLI\Utils\format_items( $format, $lines, array( 'block', 'title', 'provider', 'type', 'registered', 'posts', 'uses', 'last_used' ) );
 	}
 
 	/**

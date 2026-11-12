@@ -344,7 +344,7 @@ final class Issues implements Service {
 	/**
 	 * Post IDs with issues, filtered and paged, lowest ID first.
 	 *
-	 * @param array $args `kind`, `post_type`, `post_id`, `page` (from 1), `per_page` (0 for all).
+	 * @param array $args `kind`, `post_type`, `post_id`, `editable` (only posts the current user may edit), `page` (from 1), `per_page` (0 for all).
 	 * @return array{ids: int[], total: int}
 	 */
 	public function find( array $args = array() ): array {
@@ -360,6 +360,9 @@ final class Issues implements Service {
 			$ids[] = (int) $id;
 		}
 		sort( $ids );
+		if ( ! empty( $args['editable'] ) ) {
+			$ids = $this->editable( $ids );
+		}
 
 		$per_page = max( 0, (int) ( $args['per_page'] ?? 0 ) );
 		$total    = count( $ids );
@@ -374,6 +377,37 @@ final class Issues implements Service {
 	}
 
 	/**
+	 * The posts of a list the current user may edit. The Block Doctor capability alone is not enough: a post type can need its own.
+	 *
+	 * @param int[] $ids Post IDs.
+	 * @return int[]
+	 */
+	public function editable( array $ids ): array {
+		$allowed = array();
+		foreach ( array_chunk( $ids, 100 ) as $chunk ) {
+			$this->prime( $chunk );
+			foreach ( $chunk as $id ) {
+				if ( current_user_can( 'edit_post', $id ) ) {
+					$allowed[] = $id;
+				}
+			}
+		}
+
+		return $allowed;
+	}
+
+	/**
+	 * Loads posts into the cache with one query, so reading them one by one costs none.
+	 *
+	 * @param int[] $ids Post IDs.
+	 */
+	private function prime( array $ids ): void {
+		if ( $ids && function_exists( '_prime_post_caches' ) ) {
+			_prime_post_caches( $ids, false, true );
+		}
+	}
+
+	/**
 	 * Report rows for posts: the post, whether it changed since the scan, and its issues.
 	 *
 	 * @param int[]  $ids  Post IDs.
@@ -382,6 +416,7 @@ final class Issues implements Service {
 	 */
 	public function rows( array $ids, string $kind = '' ): array {
 		$rows = array();
+		$this->prime( array_map( 'intval', $ids ) );
 		foreach ( $ids as $id ) {
 			$post   = get_post( $id );
 			$record = $this->get( $id );

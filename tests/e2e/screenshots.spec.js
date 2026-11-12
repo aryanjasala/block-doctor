@@ -2,7 +2,7 @@
 // Run on demand: npm run screenshots
 const { test, expect } = require( './utils' );
 const { prepareSite, shot } = require( './utils/media' );
-const { MARKUP, createPost, reset, seed } = require( './seed' );
+const { MARKUP, createPost, reset, seed, installAcme, buildUsage } = require( './seed' );
 
 const SCREEN = '/wp-admin/tools.php?page=block-doctor';
 
@@ -60,7 +60,6 @@ test.describe.serial( 'Screenshots', () => {
 	} );
 
 	test( '4: fix batches with Undo batch', async ( { page } ) => {
-		page.on( 'dialog', ( dialog ) => dialog.accept() );
 		await page.goto( SCREEN );
 		await page.locator( '.bdr-restart' ).click();
 		await expect( page.locator( '.bdr-last-scan' ) ).toBeVisible( { timeout: 60_000 } );
@@ -82,9 +81,32 @@ test.describe.serial( 'Screenshots', () => {
 		await fix( [], 'deprecated' );
 		await fix( [ ids.hours, ids.nested, ids.badNotice, ids.pattern ] );
 		await page.locator( '.bdr-batches tr[data-batch="1"] .bdr-undo' ).click();
+		await page.locator( '.bdr-batches .bdr-confirm-yes' ).click();
 		await expect( page.locator( '.bdr-notice' ) ).toContainText( 'Batch #1 undone' );
 		await page.setViewportSize( { width: 1280, height: 760 } );
 		await page.locator( '.bdr-batches' ).evaluate( ( panel ) => panel.scrollIntoView( { block: 'end' } ) );
 		await shot( page, 4 );
+	} );
+
+	test( '5: the Block usage tab', async ( { page } ) => {
+		installAcme();
+		buildUsage();
+		await page.setViewportSize( { width: 1280, height: 900 } );
+		await page.goto( `${ SCREEN }&tab=usage` );
+		await page.locator( '#bdr-usage-filter' ).selectOption( 'plugin' );
+		await page.locator( '.bdr-usage tr[data-block="acme/gallery"] .bdr-usage-open' ).click();
+		await expect( page.locator( '.bdr-usage-detail tbody tr' ) ).toHaveCount( 3 );
+		const height = await page.evaluate( () => document.querySelector( '.bdr-usage-detail' ).getBoundingClientRect().bottom + window.scrollY + 40 );
+		await page.setViewportSize( { width: 1280, height: Math.ceil( height ) } );
+		await shot( page, 5 );
+	} );
+
+	test( '6: the step before a plugin with blocks in use is switched off', async ( { page } ) => {
+		await page.setViewportSize( { width: 1280, height: 760 } );
+		await page.goto( '/wp-admin/plugins.php' );
+		await page.locator( 'tr[data-slug="acme-gallery"] .deactivate a' ).click();
+		await expect( page.locator( '.block-doctor-warning-row .axle-confirm' ) ).toContainText( 'Its 2 block types are used in 4 posts.' );
+		await page.locator( '.block-doctor-warning-row' ).evaluate( ( row ) => row.scrollIntoView( { block: 'center' } ) );
+		await shot( page, 6 );
 	} );
 } );

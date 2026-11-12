@@ -657,5 +657,29 @@
 		return h ? `${ h }:${ pad( m ) }:${ pad( s ) }` : `${ m }:${ pad( s ) }`;
 	}
 
-	return { TEXT, sprintf, excerpt, blockExcerpt, tokenize, stripDelimiters, htmlBlock, validationMessage, isOutdated, analyse, scan, scanPost, repair, diffableLines, diffLines, formatDuration };
+	/**
+	 * A span of time in the largest whole unit, like PHP's human_time_diff(): 5 minutes, 2 hours, 3 days.
+	 *
+	 * @param {number} seconds Seconds, from 60 up. Smaller spans count as one minute.
+	 * @return {{unit: string, count: number}} Unit is minute, hour, day, week, month or year.
+	 */
+	function spanOf( seconds ) {
+		const units = [
+			[ 'year', 365 * 86400 ],
+			[ 'month', 30 * 86400 ],
+			[ 'week', 7 * 86400 ],
+			[ 'day', 86400 ],
+			[ 'hour', 3600 ],
+			[ 'minute', 60 ],
+		];
+		seconds = Math.max( 0, Math.round( seconds ) );
+		for ( const [ unit, size ] of units ) {
+			if ( seconds >= size ) {
+				return { unit, count: Math.round( seconds / size ) };
+			}
+		}
+		return { unit: 'minute', count: 1 };
+	}
+
+	return { TEXT, sprintf, excerpt, blockExcerpt, tokenize, stripDelimiters, htmlBlock, validationMessage, isOutdated, analyse, scan, scanPost, repair, diffableLines, diffLines, formatDuration, spanOf };
 } );

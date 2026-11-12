@@ -3,7 +3,7 @@
 // plugin, and a clean slate between tests.
 const { wp, wpEval } = require( './utils' );
 
-const OPTIONS = [ 'block_doctor_index', 'block_doctor_scan', 'block_doctor_server_scan', 'block_doctor_batches', 'block_doctor_js_blocks' ];
+const OPTIONS = [ 'block_doctor_index', 'block_doctor_scan', 'block_doctor_server_scan', 'block_doctor_batches', 'block_doctor_js_blocks', 'block_doctor_usage_scan', 'block_doctor_providers', 'block_doctor_js_sources', 'block_doctor_affected' ];
 
 // Markup that is broken the same way on WordPress 6.6, 6.9 and 7.x.
 const MARKUP = {
@@ -88,6 +88,42 @@ add_action( 'init', function () {
 `,
 };
 
+// A real plugin: a block.json block with an editor script, a block registered in PHP with a
+// render callback, and a block registered only in JavaScript from a script file. Its blocks
+// show where each kind of block gets its plugin from.
+const ACME = {
+	'acme-gallery/acme-gallery.php': `<?php
+/**
+ * Plugin Name: Acme Gallery
+ */
+function acme_gallery_ticker() {
+	return '<p>Ticker</p>';
+}
+add_action( 'init', function () {
+	register_block_type( __DIR__ . '/block' );
+	register_block_type( 'acme/ticker', array( 'render_callback' => 'acme_gallery_ticker' ) );
+} );
+add_action( 'enqueue_block_editor_assets', function () {
+	wp_enqueue_script( 'acme-gallery-js', plugins_url( 'js-only.js', __FILE__ ), array( 'wp-blocks', 'wp-element' ), '1', true );
+} );
+`,
+	'acme-gallery/block/block.json': JSON.stringify( { apiVersion: 3, name: 'acme/gallery', title: 'Acme gallery', category: 'media', editorScript: 'file:./index.js' } ),
+	'acme-gallery/block/index.js': "wp.blocks.registerBlockType( 'acme/gallery', { edit: function () { return null; }, save: function () { return null; } } );",
+	'acme-gallery/block/index.asset.php': "<?php return array( 'dependencies' => array( 'wp-blocks', 'wp-element' ), 'version' => '1' );",
+	'acme-gallery/js-only.js': "wp.blocks.registerBlockType( 'acme/js-only', { title: 'Acme JS only', category: 'text', edit: function () { return null; }, save: function () { return null; } } );",
+};
+
+// A post type with capabilities of its own, which editors do not have.
+const SECRET_TYPE = `<?php
+add_action( 'init', function () {
+	register_post_type( 'bd_secret', array( 'label' => 'Secrets', 'public' => true, 'show_in_rest' => true, 'supports' => array( 'title', 'editor' ), 'capability_type' => array( 'bd_secret', 'bd_secrets' ), 'map_meta_cap' => true ) );
+	$admin = get_role( 'administrator' );
+	foreach ( array( 'edit_bd_secrets', 'edit_others_bd_secrets', 'edit_published_bd_secrets', 'edit_private_bd_secrets', 'read_private_bd_secrets', 'publish_bd_secrets', 'delete_bd_secrets' ) as $cap ) {
+		$admin->add_cap( $cap );
+	}
+} );
+`;
+
 // Counts the writes of Block Doctor's results index.
 const INDEX_COUNTER = `<?php
 function bdr_e2e_count_index_write() {
@@ -99,7 +135,7 @@ add_action( 'delete_option_block_doctor_index', 'bdr_e2e_count_index_write' );
 `;
 
 // Every must-use file the tests write, so reset() can remove them.
-const MU_FILES = [ 'acme-notice.php', 'acme-shelf.php', 'acme-shelf/block.json', 'acme-shelf/index.js', 'acme-shelf/index.asset.php', 'bdr-index-counter.php' ];
+const MU_FILES = [ 'acme-notice.php', 'acme-shelf.php', 'acme-shelf/block.json', 'acme-shelf/index.js', 'acme-shelf/index.asset.php', 'bdr-index-counter.php', 'bd-secret-type.php' ];
 
 /**
  * Writes files into wp-content/mu-plugins.
@@ -111,6 +147,52 @@ function installMuFiles( files ) {
 		.map( ( [ file, text ] ) => `wp_mkdir_p( dirname( WPMU_PLUGIN_DIR . '/${ file }' ) ); file_put_contents( WPMU_PLUGIN_DIR . '/${ file }', base64_decode( '${ b64( text ) }' ) );` )
 		.join( ' ' );
 	wpEval( php );
+}
+
+/**
+ * Writes files into wp-content/plugins.
+ *
+ * @param {Object<string, string>} files Path inside plugins => contents.
+ */
+function installPluginFiles( files ) {
+	const php = Object.entries( files )
+		.map( ( [ file, text ] ) => `wp_mkdir_p( dirname( WP_PLUGIN_DIR . '/${ file }' ) ); file_put_contents( WP_PLUGIN_DIR . '/${ file }', base64_decode( '${ b64( text ) }' ) );` )
+		.join( ' ' );
+	wpEval( php );
+}
+
+/** Installs the Acme Gallery plugin, active, and posts that use its blocks. Returns the post IDs. */
+function installAcme() {
+	installPluginFiles( ACME );
+	wp( 'plugin', 'activate', 'acme-gallery' );
+	const gallery = ( extra = '' ) => `<!-- wp:acme/gallery /-->${ extra }`;
+	const ids = {};
+	ids.galleryA = createPost( 'Gallery page', `<!-- wp:group -->\n<div class="wp-block-group">${ gallery() }\n\n${ gallery() }</div>\n<!-- /wp:group -->`, { post_type: 'page' } );
+	ids.galleryB = createPost( 'Photos', gallery() );
+	ids.galleryC = createPost( 'Summer photos', MARKUP.paragraph( 'Summer.' ) + '\n\n' + gallery() );
+	ids.jsOnly = createPost( 'JS block post', '<!-- wp:acme/js-only /-->' );
+	ids.ticker = createPost( 'Ticker post', '<!-- wp:acme/ticker /-->' );
+	return ids;
+}
+
+/** Removes the Acme Gallery plugin and the secret post type. */
+function removeAcme() {
+	wpEval( `if ( is_dir( WP_PLUGIN_DIR . '/acme-gallery' ) ) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; if ( is_plugin_active( 'acme-gallery/acme-gallery.php' ) ) { deactivate_plugins( 'acme-gallery/acme-gallery.php', true ); } $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( WP_PLUGIN_DIR . '/acme-gallery', FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST ); foreach ( $it as $f ) { $f->isDir() ? rmdir( $f->getPathname() ) : unlink( $f->getPathname() ); } rmdir( WP_PLUGIN_DIR . '/acme-gallery' ); }` );
+}
+
+/** Notes that Acme Gallery was switched off with its blocks in use, as turning it off on the Plugins screen does. */
+function markAffected() {
+	wpEval( "update_option( 'block_doctor_affected', array( 'plugin:acme-gallery/acme-gallery.php' => time() ), false );" );
+}
+
+/** Counts the blocks of every post, now. */
+function buildUsage() {
+	wp( 'block-doctor', 'usage', '--reindex', '--format=count' );
+}
+
+/** Installs the post type with capabilities of its own. */
+function installSecretType() {
+	installMuFiles( { 'bd-secret-type.php': SECRET_TYPE } );
 }
 
 /** Installs the must-use plugin with the JavaScript-only block. */
@@ -134,11 +216,12 @@ const indexWrites = () => Number( wpEval( "echo (int) get_option( 'bdr_e2e_index
 
 /** Empties the site and forgets everything Block Doctor stored. */
 function reset() {
+	removeAcme();
 	wp( 'site', 'empty', '--yes' );
 	const list = OPTIONS.map( ( name ) => `'${ name }'` ).join( ', ' );
 	const files = MU_FILES.map( ( name ) => `'${ name }'` ).join( ', ' );
 	wpEval(
-		`foreach ( array( ${ list }, 'bdr_e2e_index_writes' ) as $o ) { delete_option( $o ); } wp_clear_scheduled_hook( 'block_doctor_server_scan' ); foreach ( array( ${ files } ) as $f ) { if ( file_exists( WPMU_PLUGIN_DIR . '/' . $f ) ) { unlink( WPMU_PLUGIN_DIR . '/' . $f ); } } if ( is_dir( WPMU_PLUGIN_DIR . '/acme-shelf' ) ) { rmdir( WPMU_PLUGIN_DIR . '/acme-shelf' ); }`
+		`delete_metadata( 'user', 0, 'block_doctor_steps_dismissed', '', true ); foreach ( array( ${ list }, 'bdr_e2e_index_writes' ) as $o ) { delete_option( $o ); } wp_clear_scheduled_hook( 'block_doctor_server_scan' ); foreach ( array( ${ files } ) as $f ) { if ( file_exists( WPMU_PLUGIN_DIR . '/' . $f ) ) { unlink( WPMU_PLUGIN_DIR . '/' . $f ); } } if ( is_dir( WPMU_PLUGIN_DIR . '/acme-shelf' ) ) { rmdir( WPMU_PLUGIN_DIR . '/acme-shelf' ); }`
 	);
 }
 
@@ -170,4 +253,4 @@ function seed() {
 	return ids;
 }
 
-module.exports = { MARKUP, OPTIONS, createPost, content, issues, option, revisions, installNoticeBlock, installShelfBlocks, installIndexCounter, indexWrites, reset, seed };
+module.exports = { MARKUP, OPTIONS, installAcme, removeAcme, buildUsage, markAffected, installSecretType, createPost, content, issues, option, revisions, installNoticeBlock, installShelfBlocks, installIndexCounter, indexWrites, reset, seed };

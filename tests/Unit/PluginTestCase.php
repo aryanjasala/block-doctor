@@ -11,11 +11,14 @@ namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 use AryanX\Axle\BlockDoctor\Batches;
 use AryanX\Axle\BlockDoctor\Checks;
 use AryanX\Axle\BlockDoctor\Config;
+use AryanX\Axle\BlockDoctor\Deactivation;
 use AryanX\Axle\BlockDoctor\Fixer;
 use AryanX\Axle\BlockDoctor\Issues;
 use AryanX\Axle\BlockDoctor\Posts;
+use AryanX\Axle\BlockDoctor\Providers;
 use AryanX\Axle\BlockDoctor\Report;
 use AryanX\Axle\BlockDoctor\Scanner;
+use AryanX\Axle\BlockDoctor\Usage;
 use Brain\Monkey\Functions;
 
 require_once dirname( __DIR__ ) . '/Doubles/wordpress.php';
@@ -174,6 +177,10 @@ abstract class PluginTestCase extends TestCase {
 			}
 		);
 
+		Functions\when( 'human_time_diff' )->justReturn( '5 minutes' );
+		Functions\when( 'plugin_basename' )->justReturn( 'block-doctor/block-doctor.php' );
+		Functions\when( 'wp_cache_get' )->justReturn( false );
+		Functions\when( 'wp_cache_set' )->justReturn( true );
 		Functions\when( 'current_user_can' )->alias(
 			function ( $cap, $id = 0 ) {
 				return 'edit_post' === $cap ? ! in_array( (int) $id, $this->forbidden, true ) : $this->can_use;
@@ -315,7 +322,7 @@ abstract class PluginTestCase extends TestCase {
 	/**
 	 * The plugin's objects, wired like Plugin does.
 	 *
-	 * @return array{config: Config, posts: Posts, issues: Issues, checks: Checks, scanner: Scanner, batches: Batches, fixer: Fixer, report: Report}
+	 * @return array{config: Config, posts: Posts, issues: Issues, checks: Checks, scanner: Scanner, batches: Batches, fixer: Fixer, report: Report, providers: Providers, usage: Usage, deactivation: Deactivation}
 	 */
 	protected function plugin(): array {
 		$config  = new Config();
@@ -324,6 +331,10 @@ abstract class PluginTestCase extends TestCase {
 		$checks  = new Checks();
 		$scanner = new Scanner( $config, $posts, $issues, $checks );
 		$batches = new Batches( $config );
+
+		$providers    = new Providers();
+		$usage        = new Usage( $config, $posts, $providers );
+		$deactivation = new Deactivation( $config, $usage, $providers );
 
 		return array(
 			'config'  => $config,
@@ -334,6 +345,10 @@ abstract class PluginTestCase extends TestCase {
 			'batches' => $batches,
 			'fixer'   => new Fixer( $posts, $issues, $batches, $scanner ),
 			'report'  => new Report( $config, $issues, $scanner ),
+
+			'providers'    => $providers,
+			'usage'        => $usage,
+			'deactivation' => $deactivation,
 		);
 	}
 }

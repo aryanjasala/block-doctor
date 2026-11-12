@@ -21,6 +21,7 @@ final class RestTest extends PluginTestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		Functions\when( '_prime_post_caches' )->justReturn( true );
 		$this->routes = array();
 
 		Functions\when( 'register_rest_route' )->alias(
@@ -44,7 +45,7 @@ final class RestTest extends PluginTestCase {
 	 */
 	private function controller(): Controller {
 		$plugin     = $this->plugin();
-		$controller = new Controller( $plugin['config'], $plugin['posts'], $plugin['issues'], $plugin['scanner'], $plugin['batches'], $plugin['fixer'], $plugin['report'] );
+		$controller = new Controller( $plugin['config'], $plugin['posts'], $plugin['issues'], $plugin['scanner'], $plugin['batches'], $plugin['fixer'], $plugin['report'], $plugin['usage'], $plugin['providers'], $plugin['deactivation'] );
 		$controller->routes();
 
 		return $controller;
@@ -54,7 +55,7 @@ final class RestTest extends PluginTestCase {
 		$this->controller();
 
 		$this->assertSame(
-			array( 'block-doctor/v1/posts', 'block-doctor/v1/scan', 'block-doctor/v1/results', 'block-doctor/v1/server-scan', 'block-doctor/v1/issues', 'block-doctor/v1/batches', 'block-doctor/v1/batches/(?P<id>\d+)/undo', 'block-doctor/v1/fix' ),
+			array( 'block-doctor/v1/posts', 'block-doctor/v1/scan', 'block-doctor/v1/results', 'block-doctor/v1/server-scan', 'block-doctor/v1/issues', 'block-doctor/v1/batches', 'block-doctor/v1/batches/(?P<id>\d+)/undo', 'block-doctor/v1/fix', 'block-doctor/v1/usage', 'block-doctor/v1/usage/posts', 'block-doctor/v1/usage/index', 'block-doctor/v1/usage/warning', 'block-doctor/v1/steps' ),
 			array_keys( $this->routes )
 		);
 		foreach ( $this->routes as $route ) {
@@ -165,7 +166,7 @@ final class RestTest extends PluginTestCase {
 
 	public function test_routes_are_added_on_rest_api_init(): void {
 		$plugin     = $this->plugin();
-		$controller = new Controller( $plugin['config'], $plugin['posts'], $plugin['issues'], $plugin['scanner'], $plugin['batches'], $plugin['fixer'], $plugin['report'] );
+		$controller = new Controller( $plugin['config'], $plugin['posts'], $plugin['issues'], $plugin['scanner'], $plugin['batches'], $plugin['fixer'], $plugin['report'], $plugin['usage'], $plugin['providers'], $plugin['deactivation'] );
 		$controller->register();
 
 		$this->assertNotFalse( has_action( 'rest_api_init', array( $controller, 'routes' ) ) );

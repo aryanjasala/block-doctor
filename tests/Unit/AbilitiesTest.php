@@ -21,6 +21,7 @@ final class AbilitiesTest extends PluginTestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		Functions\when( '_prime_post_caches' )->justReturn( true );
 		$this->abilities = array();
 
 		Functions\when( 'wp_register_ability' )->alias(
@@ -40,7 +41,7 @@ final class AbilitiesTest extends PluginTestCase {
 	 */
 	private function abilities(): Abilities {
 		$plugin    = $this->plugin();
-		$abilities = new Abilities( $plugin['config'], $plugin['posts'], $plugin['issues'], $plugin['scanner'], $plugin['fixer'], $plugin['report'] );
+		$abilities = new Abilities( $plugin['config'], $plugin['posts'], $plugin['issues'], $plugin['scanner'], $plugin['fixer'], $plugin['report'], $plugin['usage'], $plugin['providers'] );
 		$abilities->register();
 		$abilities->register_category();
 		$abilities->register_abilities();
@@ -52,7 +53,7 @@ final class AbilitiesTest extends PluginTestCase {
 		$abilities = $this->abilities();
 
 		$this->assertNotFalse( has_action( 'wp_abilities_api_init', array( $abilities, 'register_abilities' ) ) );
-		$this->assertSame( array( 'block-doctor/get-scan-summary', 'block-doctor/list-issues', 'block-doctor/run-server-scan', 'block-doctor/undo-batch' ), array_keys( $this->abilities ) );
+		$this->assertSame( array( 'block-doctor/get-scan-summary', 'block-doctor/list-issues', 'block-doctor/run-server-scan', 'block-doctor/get-block-usage', 'block-doctor/run-usage-index', 'block-doctor/undo-batch' ), array_keys( $this->abilities ) );
 
 		$annotations = array_map(
 			static function ( $ability ) {
