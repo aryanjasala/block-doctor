@@ -130,7 +130,9 @@ test.describe.serial( 'Block usage', () => {
 
 	test( 'the browser scan records which plugin registered a JavaScript-only block', async ( { page } ) => {
 		await page.goto( USAGE );
-		await expect( usageRow( page, 'acme/js-only' ) ).toHaveCount( 0, { timeout: 5_000 } );
+		await expect( usageRow( page, 'acme/gallery' ) ).toBeVisible();
+		// Until a browser scan has seen its script, nothing says who provides it.
+		await expect( usageRow( page, 'acme/js-only' ).locator( '.bdr-provider' ) ).toHaveText( 'Unknown' );
 		// Registered only in the browser, so the server knows nothing of it yet.
 		expect( option( 'block_doctor_js_sources' ) ).toBeNull();
 
