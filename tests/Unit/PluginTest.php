@@ -34,6 +34,6 @@ final class PluginTest extends PluginTestCase {
 	public function test_deactivation_stops_a_background_scan(): void {
 		Plugin::deactivate();
 
-		$this->assertSame( array( Scanner::CRON ), $this->cleared );
+		$this->assertSame( array( Scanner::CRON, \AryanX\Axle\BlockDoctor\Usage::CRON ), $this->cleared );
 	}
 }

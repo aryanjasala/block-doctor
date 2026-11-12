@@ -76,15 +76,7 @@
 }
 
 .bdr-toolbar {
-	align-items: center;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
 	margin-bottom: 12px;
-}
-
-.bdr-toolbar .bdr-export {
-	margin-left: auto;
 }
 
 .bdr-table .check-column {
@@ -322,4 +314,59 @@
    striped table their text drops under 4.5:1 with the older admin blue. */
 .bdr-panel .striped .components-button.is-secondary {
 	background: var(--axle-surface);
+}
+
+/* Tabs above the page: space below, like core's own screens. */
+.bdr-nav {
+	margin-bottom: 8px;
+}
+
+/* The core spinner floats; next to a button it has to sit in the line. */
+.bdr-wrap .bdr-spinner {
+	float: none;
+	margin: 0 4px;
+}
+
+.bdr-confirm {
+	margin: 12px 0;
+}
+
+.bdr-confirm-row td {
+	padding: 0 10px;
+}
+
+.bdr-load-error .button,
+.bdr-usage-empty .button {
+	margin-top: 8px;
+}
+
+/* Block usage tab. */
+.bdr-usage-toolbar select,
+.bdr-usage-toolbar input[type="search"] {
+	max-width: 100%;
+}
+
+.bdr-usage .bdr-slug {
+	display: block;
+	margin-top: 2px;
+}
+
+.bdr-usage .bdr-unregistered {
+	margin-left: 8px;
+}
+
+.bdr-provider-kind {
+	color: var(--axle-muted);
+}
+
+.bdr-where {
+	max-width: 40ch;
+}
+
+.bdr-usage-stats {
+	margin-bottom: 16px;
+}
+
+.bdr-provider-line {
+	margin: 0 0 12px;
 }

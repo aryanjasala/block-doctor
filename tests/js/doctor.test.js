@@ -376,3 +376,14 @@ test( 'helpers: sprintf, validation messages, excerpts and durations', () => {
 	assert.equal( core.formatDuration( 65 ), '1:05' );
 	assert.equal( core.formatDuration( 3725 ), '1:02:05' );
 } );
+
+test( 'spanOf gives the largest whole unit', () => {
+	assert.deepEqual( core.spanOf( 30 ), { unit: 'minute', count: 1 } );
+	assert.deepEqual( core.spanOf( 5 * 60 ), { unit: 'minute', count: 5 } );
+	assert.deepEqual( core.spanOf( 3 * 3600 ), { unit: 'hour', count: 3 } );
+	assert.deepEqual( core.spanOf( 2 * 86400 ), { unit: 'day', count: 2 } );
+	assert.deepEqual( core.spanOf( 14 * 86400 ), { unit: 'week', count: 2 } );
+	assert.deepEqual( core.spanOf( 90 * 86400 ), { unit: 'month', count: 3 } );
+	assert.deepEqual( core.spanOf( 800 * 86400 ), { unit: 'year', count: 2 } );
+	assert.deepEqual( core.spanOf( -5 ), { unit: 'minute', count: 1 } );
+} );

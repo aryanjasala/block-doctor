@@ -11,8 +11,14 @@ use AryanX\Axle\BlockDoctor\Config;
 use AryanX\Axle\BlockDoctor\Issues;
 use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
+use Brain\Monkey\Functions;
 
 final class IssuesTest extends PluginTestCase {
+
+	protected function setUp(): void {
+		parent::setUp();
+		Functions\when( '_prime_post_caches' )->justReturn( true );
+	}
 
 	/**
 	 * An issue.

@@ -167,6 +167,77 @@ final class Config {
 	}
 
 	/**
+	 * Whether the block usage index builds itself in the background the first time an editor opens the admin.
+	 *
+	 * @return bool
+	 */
+	public function usage_auto_index(): bool {
+		/**
+		 * Filters whether the block usage index builds itself with WP-Cron when it was never built.
+		 * Return false to build it yourself with `wp block-doctor usage --reindex` or on Tools > Block Doctor.
+		 *
+		 * @param bool $auto Default true.
+		 */
+		return (bool) apply_filters( 'block_doctor_usage_auto_index', true );
+	}
+
+	/**
+	 * Rows per page on the Block usage tab and in the post lists.
+	 *
+	 * @return int
+	 */
+	public function usage_per_page(): int {
+		/**
+		 * Filters how many block types or posts one page of the Block usage tab lists.
+		 *
+		 * @param int $per_page Default 20, from 1 to 100.
+		 */
+		return max( 1, min( 100, (int) apply_filters( 'block_doctor_usage_per_page', 20 ) ) );
+	}
+
+	/**
+	 * Block positions listed for one post.
+	 *
+	 * @return int
+	 */
+	public function usage_positions(): int {
+		/**
+		 * Filters how many positions of one block type the post list shows for each post.
+		 *
+		 * @param int $limit Default 10, from 1 to 100.
+		 */
+		return max( 1, min( 100, (int) apply_filters( 'block_doctor_usage_positions', 10 ) ) );
+	}
+
+	/**
+	 * Posts named in the warning before a plugin is turned off.
+	 *
+	 * @return int
+	 */
+	public function warning_posts(): int {
+		/**
+		 * Filters how many of the most affected posts the warning before a plugin is deactivated or deleted lists.
+		 *
+		 * @param int $limit Default 5, from 1 to 20.
+		 */
+		return max( 1, min( 20, (int) apply_filters( 'block_doctor_deactivation_top_posts', 5 ) ) );
+	}
+
+	/**
+	 * Whether WP-CLI prints a warning when a plugin with blocks in use is deactivated.
+	 *
+	 * @return bool
+	 */
+	public function cli_warning(): bool {
+		/**
+		 * Filters whether `wp plugin deactivate` prints a warning line when the plugin's blocks are in use. The command is never blocked.
+		 *
+		 * @param bool $warn Default true.
+		 */
+		return (bool) apply_filters( 'block_doctor_cli_deactivation_warning', true );
+	}
+
+	/**
 	 * How a block type with invalid content is repaired by default.
 	 *
 	 * @param string $block_name Block name, such as core/paragraph. Empty for the default of every other block.

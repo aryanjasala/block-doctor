@@ -1,53 +1,471 @@
 {
   "$comment": "Screens tests/e2e/a11y.spec.js checks with axe-core. This file belongs to the plugin: apply-template.py only writes it when it is missing. The fields are described in docs/DEVELOPMENT.md.",
-  "include": ["#wpbody-content"],
+  "include": [
+    "#wpbody-content"
+  ],
   "exclude": [],
   "screens": [
     {
-      "name": "Tools > Block Doctor before the first scan",
-      "setup": [{ "js": "seed.js", "call": "reset" }],
+      "name": "Tools > Block Doctor first visit with the Get started card",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ],
       "url": "/wp-admin/tools.php?page=block-doctor",
-      "steps": [{ "waitFor": ".bdr-start" }]
+      "steps": [
+        {
+          "waitFor": ".bdr-start-card"
+        },
+        {
+          "waitFor": ".bdr-no-batches"
+        }
+      ]
     },
     {
       "name": "Tools > Block Doctor report after a scan",
-      "setup": [{ "js": "seed.js", "call": "reset" }, { "js": "seed.js", "call": "seed", "save": "ids" }],
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "seed",
+          "save": "ids"
+        }
+      ],
       "url": "/wp-admin/tools.php?page=block-doctor",
-      "steps": [{ "click": ".bdr-start" }, { "waitFor": ".bdr-last-scan" }],
-      "cleanup": [{ "js": "seed.js", "call": "reset" }]
+      "steps": [
+        {
+          "click": ".bdr-start"
+        },
+        {
+          "waitFor": ".bdr-last-scan"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Tools > Block Doctor Clear results step",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "seed",
+          "save": "ids"
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor",
+      "steps": [
+        {
+          "click": ".bdr-start"
+        },
+        {
+          "waitFor": ".bdr-last-scan"
+        },
+        {
+          "click": ".bdr-clear"
+        },
+        {
+          "waitFor": ".bdr-report .axle-confirm"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
     },
     {
       "name": "Fix preview with a diff",
-      "setup": [{ "js": "seed.js", "call": "reset" }, { "js": "seed.js", "call": "seed", "save": "ids" }],
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "seed",
+          "save": "ids"
+        }
+      ],
       "url": "/wp-admin/tools.php?page=block-doctor",
       "steps": [
-        { "click": ".bdr-start" },
-        { "waitFor": ".bdr-last-scan" },
-        { "click": ".bdr-table tr[data-post=\"{ids.hours}\"] input[type=\"checkbox\"]" },
-        { "click": ".bdr-table tr[data-post=\"{ids.badNotice}\"] input[type=\"checkbox\"]" },
-        { "click": ".bdr-fix-selected" },
-        { "click": ".bdr-preview-item[data-post=\"{ids.hours}\"] .bdr-toggle-diff" },
-        { "waitFor": ".bdr-diff" }
+        {
+          "click": ".bdr-start"
+        },
+        {
+          "waitFor": ".bdr-last-scan"
+        },
+        {
+          "click": ".bdr-table tr[data-post=\"{ids.hours}\"] input[type=\"checkbox\"]"
+        },
+        {
+          "click": ".bdr-table tr[data-post=\"{ids.badNotice}\"] input[type=\"checkbox\"]"
+        },
+        {
+          "click": ".bdr-fix-selected"
+        },
+        {
+          "click": ".bdr-preview-item[data-post=\"{ids.hours}\"] .bdr-toggle-diff"
+        },
+        {
+          "waitFor": ".bdr-diff"
+        }
       ],
-      "include": ["#wpbody-content", ".bdr-modal"],
-      "cleanup": [{ "js": "seed.js", "call": "reset" }]
+      "include": [
+        "#wpbody-content",
+        ".bdr-modal"
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
     },
     {
-      "name": "Fix batches with Undo after applying a fix",
-      "setup": [{ "js": "seed.js", "call": "reset" }, { "js": "seed.js", "call": "seed", "save": "ids" }],
-      "dialogs": "accept",
+      "name": "Fix batches with the Undo step after applying a fix",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "seed",
+          "save": "ids"
+        }
+      ],
       "url": "/wp-admin/tools.php?page=block-doctor",
       "steps": [
-        { "click": ".bdr-start" },
-        { "waitFor": ".bdr-last-scan" },
-        { "click": ".bdr-table tr[data-post=\"{ids.hours}\"] input[type=\"checkbox\"]" },
-        { "click": ".bdr-fix-selected" },
-        { "click": ".bdr-apply" },
-        { "waitFor": ".bdr-modal .components-notice" },
-        { "click": ".bdr-close" },
-        { "waitFor": ".bdr-batches" }
+        {
+          "click": ".bdr-start"
+        },
+        {
+          "waitFor": ".bdr-last-scan"
+        },
+        {
+          "click": ".bdr-table tr[data-post=\"{ids.hours}\"] input[type=\"checkbox\"]"
+        },
+        {
+          "click": ".bdr-fix-selected"
+        },
+        {
+          "click": ".bdr-apply"
+        },
+        {
+          "waitFor": ".bdr-modal .components-notice"
+        },
+        {
+          "click": ".bdr-close"
+        },
+        {
+          "waitFor": ".bdr-batches"
+        },
+        {
+          "click": ".bdr-batches .bdr-undo"
+        },
+        {
+          "waitFor": ".bdr-batches .axle-confirm"
+        }
       ],
-      "cleanup": [{ "js": "seed.js", "call": "reset" }]
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Block usage tab before the index is built",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor&tab=usage",
+      "steps": [
+        {
+          "waitFor": ".bdr-index"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Block usage tab with block types",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor&tab=usage",
+      "steps": [
+        {
+          "waitFor": ".bdr-usage tbody tr"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Block usage tab with nothing matching the search",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor&tab=usage",
+      "steps": [
+        {
+          "waitFor": ".bdr-usage tbody tr"
+        },
+        {
+          "fill": "#bdr-usage-search",
+          "value": "zzzz-nothing"
+        },
+        {
+          "waitFor": ".bdr-usage-empty"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Block usage tab with the posts that use one block",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor&tab=usage",
+      "steps": [
+        {
+          "waitFor": ".bdr-usage tbody tr"
+        },
+        {
+          "click": ".bdr-usage tr[data-block=\"acme/gallery\"] .bdr-usage-open"
+        },
+        {
+          "waitFor": ".bdr-usage-detail tbody tr"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Block usage tab filtered to one plugin",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor&tab=usage&provider=plugin%3Aacme-gallery%2Facme-gallery.php",
+      "steps": [
+        {
+          "waitFor": ".bdr-provider-line"
+        },
+        {
+          "waitFor": ".bdr-usage tbody tr"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Block usage tab with blocks of a plugin that is off",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        },
+        {
+          "wp": [
+            "plugin",
+            "deactivate",
+            "acme-gallery"
+          ]
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor&tab=usage",
+      "steps": [
+        {
+          "waitFor": ".bdr-unregistered"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Plugins screen step before Deactivate",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/plugins.php",
+      "steps": [
+        {
+          "click": "tr[data-slug=\"acme-gallery\"] .deactivate a"
+        },
+        {
+          "waitFor": ".block-doctor-warning-row .axle-confirm"
+        }
+      ],
+      "include": [
+        ".block-doctor-warning-row"
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Plugins screen notice after a plugin with blocks in use was turned off",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installAcme",
+          "save": "acme"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        },
+        {
+          "wp": [
+            "plugin",
+            "deactivate",
+            "acme-gallery"
+          ]
+        },
+        {
+          "js": "seed.js",
+          "call": "markAffected"
+        }
+      ],
+      "url": "/wp-admin/plugins.php",
+      "steps": [
+        {
+          "waitFor": ".block-doctor-affected"
+        }
+      ],
+      "include": [
+        ".block-doctor-affected"
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
     }
   ],
   "skip": {}

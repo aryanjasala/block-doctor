@@ -20,6 +20,8 @@ final class AdminTest extends PluginTestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		Functions\when( '_prime_post_caches' )->justReturn( true );
+		Functions\when( 'get_user_meta' )->justReturn( '' );
 		Functions\when( 'admin_url' )->alias(
 			static function ( $path = '' ) {
 				return 'https://example.com/wp-admin/' . $path;
@@ -67,7 +69,7 @@ final class AdminTest extends PluginTestCase {
 		Filters\expectApplied( 'block_doctor_capability' )->andReturn( 'manage_options' );
 		Functions\expect( 'add_management_page' )->once()->with( 'Block Doctor', 'Block Doctor', 'manage_options', 'block-doctor', \Mockery::type( 'array' ) )->andReturn( 'tools_page_block-doctor' );
 		$plugin = $this->plugin();
-		$page   = new Page( $plugin['config'], $plugin['report'] );
+		$page   = new Page( $plugin['config'], $plugin['report'], $plugin['usage'] );
 		$page->register();
 		$page->menu();
 
@@ -78,7 +80,7 @@ final class AdminTest extends PluginTestCase {
 
 	public function test_the_screen_counts_as_a_block_editor_screen_so_core_loads_every_block_editor_script(): void {
 		$plugin = $this->plugin();
-		$page   = new Page( $plugin['config'], $plugin['report'] );
+		$page   = new Page( $plugin['config'], $plugin['report'], $plugin['usage'] );
 		$page->load();
 
 		$this->assertNotFalse( has_filter( 'should_load_block_editor_scripts_and_styles', '__return_true' ) );
@@ -90,7 +92,7 @@ final class AdminTest extends PluginTestCase {
 		\WP_Block_Type_Registry::$names[]                     = 'acme/shelf';
 		\WP_Block_Type_Registry::$editor_scripts['acme/shelf'] = array( 'acme-shelf-editor-script' );
 		$plugin  = $this->plugin();
-		$page    = new Page( $plugin['config'], $plugin['report'] );
+		$page    = new Page( $plugin['config'], $plugin['report'], $plugin['usage'] );
 		$queued  = array();
 		$inline  = array();
 		Functions\when( 'wp_enqueue_script' )->alias(
@@ -119,7 +121,8 @@ final class AdminTest extends PluginTestCase {
 
 		$this->assertSame( array( 'wp-blocks', 'wp-block-library', 'wp-format-library', 'wp-block-editor', 'acme-shelf-editor-script', 'block-doctor-admin' ), $queued );
 		$this->assertStringContainsString( 'wp-blocks: wp.blocks.unstable__bootstrapServerSideBlockDefinitions(', $inline[0] );
-		$this->assertStringContainsString( 'block-doctor-admin: window.blockDoctorData = ', $inline[2] );
+		$this->assertStringContainsString( 'window.blockDoctorSources', $inline[2] );
+		$this->assertStringContainsString( 'block-doctor-admin: window.blockDoctorData = ', $inline[3] );
 	}
 
 	public function test_the_screen_data_lists_only_block_types_whose_strategy_differs(): void {
@@ -136,7 +139,7 @@ final class AdminTest extends PluginTestCase {
 			}
 		);
 		$plugin = $this->plugin();
-		$data   = ( new Page( $plugin['config'], $plugin['report'] ) )->data();
+		$data   = ( new Page( $plugin['config'], $plugin['report'], $plugin['usage'] ) )->data();
 
 		$this->assertSame( 'recover', $data['strategy'] );
 		$this->assertEquals( (object) array( 'acme/slider' => 'html' ), $data['strategies'] );
@@ -155,7 +158,7 @@ final class AdminTest extends PluginTestCase {
 			}
 		);
 		$plugin = $this->plugin();
-		$page   = new Page( $plugin['config'], $plugin['report'] );
+		$page   = new Page( $plugin['config'], $plugin['report'], $plugin['usage'] );
 
 		foreach ( array( 'render', 'export' ) as $method ) {
 			try {
@@ -187,11 +190,11 @@ final class AdminTest extends PluginTestCase {
 		$widget->render();
 		$html = (string) ob_get_clean();
 		$this->assertStringContainsString( '<li class="bdr-widget-invalid"><strong>1</strong> Invalid, in 1 post</li>', $html );
-		$this->assertStringContainsString( 'Last scan: 23 October 2026', $html );
+		$this->assertStringContainsString( 'Last scan: <time class="axle-time"', $html );
 	}
 
 	public function test_site_health_says_good_until_posts_have_broken_blocks(): void {
-		$health = new SiteHealth( $this->plugin()['report'] );
+		$health = new SiteHealth( $this->plugin()['report'], $this->plugin()['usage'], $this->plugin()['deactivation'] );
 		$tests  = $health->add_test( array( 'direct' => array() ) );
 		$this->assertSame( array( $health, 'run' ), $tests['direct']['block_doctor']['test'] );
 		$this->assertSame( 'not an array', $health->add_test( 'not an array' ) );
@@ -205,13 +208,13 @@ final class AdminTest extends PluginTestCase {
 		$this->some_issues();
 		$result = $health->run();
 		$this->assertSame( 'recommended', $result['status'] );
-		$this->assertSame( '1 post has invalid or broken blocks (last scan 23 October 2026)', $result['label'] );
+		$this->assertSame( '1 post has invalid or broken blocks', $result['label'] );
 	}
 
 	public function test_the_hooks_are_registered(): void {
 		$plugin = $this->plugin();
 		$widget = new Dashboard( $plugin['config'], $plugin['report'] );
-		$health = new SiteHealth( $plugin['report'] );
+		$health = new SiteHealth( $plugin['report'], $plugin['usage'], $plugin['deactivation'] );
 		$widget->register();
 		$health->register();
 
