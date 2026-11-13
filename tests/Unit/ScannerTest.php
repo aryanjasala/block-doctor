@@ -194,7 +194,7 @@ final class ScannerTest extends PluginTestCase {
 		$this->assertSame( 'running', $scanner->pause_browser( false )['status'] );
 
 		$this->options[ Scanner::BROWSER ] = 'garbage';
-		$this->assertSame( array( 'status' => 'idle', 'started' => 0, 'finished' => 0, 'cursor' => 0, 'done' => 0, 'total' => 0, 'found' => 0, 'post_type' => '' ), $scanner->state( 'browser' ) );
+		$this->assertSame( array( 'status' => 'idle', 'started' => 0, 'finished' => 0, 'cursor' => 0, 'done' => 0, 'total' => 0, 'found' => 0, 'post_type' => '', 'user' => 0 ), $scanner->state( 'browser' ) );
 	}
 
 	public function test_the_server_scan_runs_in_batches_and_carries_on_with_wp_cron(): void {
@@ -223,6 +223,35 @@ final class ScannerTest extends PluginTestCase {
 
 		$this->assertSame( 'done', $plugin['scanner']->server_batch()['state']['status'], 'a finished scan does nothing' );
 		$this->assertCount( 2, \WP_Query::$made );
+	}
+
+	public function test_the_server_scan_skips_and_does_not_store_posts_the_user_cannot_edit(): void {
+		$plugin = $this->plugin();
+		$a      = $this->add_post( 'classic a', array( 'ID' => 3 ) );
+		$b      = $this->add_post( 'classic b', array( 'ID' => 4 ) );
+		\WP_Query::$queue = array( array( 'posts' => array( $a, $b ) ) );
+		$this->forbidden = array( 3 );
+
+		$plugin['scanner']->begin_server();
+		$this->assertSame( 1, $plugin['scanner']->state( 'server' )['user'], 'the scan remembers who started it' );
+		$batch = $plugin['scanner']->server_batch();
+
+		$this->assertSame( array( 4 ), array_keys( $batch['found'] ) );
+		$this->assertSame( array( 4 ), array_keys( $this->options[ Issues::INDEX ] ) );
+		$this->assertSame( array( 2, 4, 1 ), array( $batch['state']['done'], $batch['state']['cursor'], $batch['state']['found'] ), 'skipped posts still move the scan on' );
+	}
+
+	public function test_a_scan_without_a_user_checks_every_post(): void {
+		Functions\when( 'get_current_user_id' )->justReturn( 0 );
+		$plugin = $this->plugin();
+		$a      = $this->add_post( 'classic a', array( 'ID' => 3 ) );
+		\WP_Query::$queue = array( array( 'posts' => array( $a ) ) );
+		$this->forbidden = array( 3 );
+
+		$plugin['scanner']->begin_server();
+		$batch = $plugin['scanner']->server_batch();
+
+		$this->assertSame( array( 3 ), array_keys( $batch['found'] ), 'WP-CLI and WP-Cron have no user to check' );
 	}
 
 	public function test_one_post_type_and_wp_cron_runs_until_done(): void {

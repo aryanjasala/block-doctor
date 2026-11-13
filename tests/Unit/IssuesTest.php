@@ -152,6 +152,13 @@ final class IssuesTest extends PluginTestCase {
 		$this->assertSame( array( 'issues' => 1, 'posts' => 1 ), $issues->counts( 'page' )['classic'] );
 		$this->assertSame( 2, $issues->broken_posts(), 'classic alone is not broken' );
 
+		$this->forbidden = array( 7 );
+		$mine            = $issues->entries( true );
+		$this->assertSame( array( 3, 9 ), array_keys( $mine ) );
+		$this->assertSame( array( 'issues' => 1, 'posts' => 1 ), $issues->counts( '', $mine )['classic'] );
+		$this->assertSame( 1, $issues->broken_posts( $mine ), 'only the post this user may edit is counted' );
+		$this->forbidden = array();
+
 		$this->assertSame( array( 'ids' => array( 3, 7, 9 ), 'total' => 3 ), $issues->find() );
 		$this->assertSame( array( 'ids' => array( 7, 9 ), 'total' => 2 ), $issues->find( array( 'kind' => 'classic' ) ) );
 		$this->assertSame( array( 'ids' => array( 9 ), 'total' => 1 ), $issues->find( array( 'post_type' => 'page' ) ) );

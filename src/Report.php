@@ -51,19 +51,23 @@ final class Report {
 	/**
 	 * Counts and the state of both scans.
 	 *
+	 * The counts cover the posts the current user may edit, like the report
+	 * rows. WP-CLI and WP-Cron have no user and count everything.
+	 *
 	 * @return array
 	 */
 	public function summary(): array {
 		$browser = $this->scanner->state( 'browser' );
 		$server  = $this->scanner->state( 'server' );
+		$entries = $this->issues->entries( get_current_user_id() > 0 );
 
 		return array(
 			'browser'      => $browser,
 			'server'       => $server,
 			'last_scan'    => max( $browser['finished'], $server['finished'] ),
-			'posts'        => count( $this->issues->index() ),
-			'broken_posts' => $this->issues->broken_posts(),
-			'counts'       => $this->issues->counts(),
+			'posts'        => count( $entries ),
+			'broken_posts' => $this->issues->broken_posts( $entries ),
+			'counts'       => $this->issues->counts( '', $entries ),
 		);
 	}
 
@@ -130,7 +134,7 @@ final class Report {
 	 * @return array[]
 	 */
 	public function kinds(): array {
-		$counts = $this->issues->counts();
+		$counts = $this->issues->counts( '', $this->issues->entries( get_current_user_id() > 0 ) );
 		$kinds  = array();
 		foreach ( $this->config->issue_kinds() as $key => $kind ) {
 			$kinds[] = array_merge( array( 'key' => $key ), $kind, $counts[ $key ] ?? array() );

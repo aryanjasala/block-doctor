@@ -82,7 +82,7 @@ final class Scanner implements Service {
 	 * State of a scan.
 	 *
 	 * @param string $source `browser` or `server`.
-	 * @return array{status: string, started: int, finished: int, cursor: int, done: int, total: int, found: int, post_type: string}
+	 * @return array{status: string, started: int, finished: int, cursor: int, done: int, total: int, found: int, post_type: string, user: int}
 	 */
 	public function state( string $source ): array {
 		$state = get_option( 'server' === $source ? self::SERVER : self::BROWSER, array() );
@@ -97,6 +97,7 @@ final class Scanner implements Service {
 			'total'     => (int) ( $state['total'] ?? 0 ),
 			'found'     => (int) ( $state['found'] ?? 0 ),
 			'post_type' => (string) ( $state['post_type'] ?? '' ),
+			'user'      => (int) ( $state['user'] ?? 0 ),
 		);
 	}
 
@@ -225,9 +226,17 @@ final class Scanner implements Service {
 
 		$limit = $this->config->batch_size();
 		$posts = $this->posts->after( $state['cursor'], $limit, $state['post_type'] );
+		// Who the scan runs for: the caller, or the person who started it when WP-Cron carries it on. No user (WP-CLI) checks every post.
+		$user = get_current_user_id() ? get_current_user_id() : $state['user'];
 		$this->issues->begin();
 		try {
 			foreach ( $posts as $post ) {
+				$state['cursor'] = (int) $post->ID;
+				++$state['done'];
+				// Posts this user cannot edit are not checked or stored.
+				if ( $user && ! user_can( $user, 'edit_post', $post->ID ) ) {
+					continue;
+				}
 				$server = array();
 				if ( $this->scan_post( $post, null, '', $server ) ) {
 					++$state['found'];
@@ -235,8 +244,6 @@ final class Scanner implements Service {
 				if ( $server ) {
 					$found[ (int) $post->ID ] = $server;
 				}
-				$state['cursor'] = (int) $post->ID;
-				++$state['done'];
 			}
 		} finally {
 			// One write of the results index for the whole batch, not one per post.
@@ -318,6 +325,7 @@ final class Scanner implements Service {
 			'total'     => $this->posts->total( $post_type ),
 			'found'     => 0,
 			'post_type' => $post_type,
+			'user'      => get_current_user_id(),
 		);
 		$this->save( $source, $state );
 
@@ -325,7 +333,7 @@ final class Scanner implements Service {
 		 * Fires when a scan starts.
 		 *
 		 * @param string $source `browser` (Tools > Block Doctor) or `server` (WP-CLI, abilities, WP-Cron).
-		 * @param array  $state  status, started, finished, cursor, done, total, found, post_type.
+		 * @param array  $state  status, started, finished, cursor, done, total, found, post_type, user.
 		 */
 		do_action( 'block_doctor_scan_started', $source, $state );
 

@@ -74,7 +74,7 @@ test.describe.serial( 'Block usage', () => {
 		await expect( usageRow( page, 'acme/gallery' ) ).toContainText( 'Acme Gallery' );
 		await expect( usageRow( page, 'acme/gallery' ).locator( 'td' ).nth( 2 ) ).toHaveText( '3' );
 		await expect( usageRow( page, 'acme/gallery' ).locator( 'td' ).nth( 3 ) ).toHaveText( '4' );
-		await expect( usageRow( page, 'acme/gallery' ).locator( 'time.axle-time' ) ).toHaveText( /ago|Just now/ );
+		await expect( usageRow( page, 'acme/gallery' ).locator( 'time.axle-time' ) ).toHaveText( /ago|just now/ );
 		await expect( page.locator( '.bdr-usage-stats' ) ).toContainText( 'block types in use' );
 
 		// Filters.

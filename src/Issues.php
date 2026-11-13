@@ -298,10 +298,11 @@ final class Issues implements Service {
 	/**
 	 * Issue and post counts per kind.
 	 *
-	 * @param string $post_type Only this post type, or '' for all.
+	 * @param string     $post_type Only this post type, or '' for all.
+	 * @param array|null $entries   Entries to count, from entries(), or null for the whole index.
 	 * @return array<string, array{issues: int, posts: int}>
 	 */
-	public function counts( string $post_type = '' ): array {
+	public function counts( string $post_type = '', ?array $entries = null ): array {
 		$counts = array();
 		foreach ( array_keys( $this->config->issue_kinds() ) as $kind ) {
 			$counts[ $kind ] = array(
@@ -309,7 +310,7 @@ final class Issues implements Service {
 				'posts'  => 0,
 			);
 		}
-		foreach ( $this->index() as $entry ) {
+		foreach ( ( $entries ?? $this->index() ) as $entry ) {
 			if ( '' !== $post_type && $entry['type'] !== $post_type ) {
 				continue;
 			}
@@ -327,18 +328,34 @@ final class Issues implements Service {
 	/**
 	 * Posts with at least one issue that counts as broken (Site Health).
 	 *
+	 * @param array|null $entries Entries to count, from entries(), or null for the whole index.
 	 * @return int
 	 */
-	public function broken_posts(): int {
+	public function broken_posts( ?array $entries = null ): int {
 		$broken = array_keys( array_filter( wp_list_pluck( $this->config->issue_kinds(), 'broken' ) ) );
 		$count  = 0;
-		foreach ( $this->index() as $entry ) {
+		foreach ( ( $entries ?? $this->index() ) as $entry ) {
 			if ( array_intersect( array_keys( $entry['kinds'] ), $broken ) ) {
 				++$count;
 			}
 		}
 
 		return $count;
+	}
+
+	/**
+	 * The stored index, or only the entries of posts the current user may edit.
+	 *
+	 * @param bool $editable Leave out posts the current user cannot edit.
+	 * @return array<int, array{type: string, kinds: array<string, int>}>
+	 */
+	public function entries( bool $editable = false ): array {
+		$index = $this->index();
+		if ( ! $editable ) {
+			return $index;
+		}
+
+		return array_intersect_key( $index, array_flip( $this->editable( array_map( 'intval', array_keys( $index ) ) ) ) );
 	}
 
 	/**

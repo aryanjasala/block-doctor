@@ -158,7 +158,7 @@
 		const now = Math.floor( Date.now() / 1000 );
 		let text;
 		if ( Math.abs( now - time ) < 60 ) {
-			text = __( 'Just now', 'block-doctor' );
+			text = __( 'just now', 'block-doctor' );
 		} else {
 			const span = core.spanOf( Math.abs( now - time ) );
 			const spans = {
