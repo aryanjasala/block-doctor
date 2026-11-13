@@ -492,7 +492,7 @@ test.describe.serial( 'Block Doctor', () => {
 			await scanSite( page );
 			// A time reads as "5 minutes ago", and the exact time in the site's format and zone is in its title.
 			const finished = wpEval( "echo wp_date( 'Y-m-d H:i', get_option( 'block_doctor_scan' )['finished'] );" );
-			await expect( page.locator( '.bdr-last-scan time.axle-time' ) ).toHaveText( /ago|Just now/ );
+			await expect( page.locator( '.bdr-last-scan time.axle-time' ) ).toHaveText( /ago|just now/ );
 			await expect( page.locator( '.bdr-last-scan time.axle-time' ) ).toHaveAttribute( 'title', finished );
 
 			await fixSelected( page, [ ids.hours ] );

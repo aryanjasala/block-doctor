@@ -186,6 +186,11 @@ abstract class PluginTestCase extends TestCase {
 				return 'edit_post' === $cap ? ! in_array( (int) $id, $this->forbidden, true ) : $this->can_use;
 			}
 		);
+		Functions\when( 'user_can' )->alias(
+			function ( $user, $cap, $id = 0 ) {
+				return 'edit_post' === $cap ? ! in_array( (int) $id, $this->forbidden, true ) : $this->can_use;
+			}
+		);
 		Functions\when( 'get_current_user_id' )->justReturn( 1 );
 		Functions\when( 'get_edit_post_link' )->alias(
 			static function ( $id ) {

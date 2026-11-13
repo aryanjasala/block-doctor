@@ -60,7 +60,7 @@ final class AxleUi {
 		$span = human_time_diff( $timestamp, $now );
 
 		if ( abs( $now - $timestamp ) < MINUTE_IN_SECONDS ) {
-			$text = __( 'Just now', 'block-doctor' );
+			$text = __( 'just now', 'block-doctor' );
 		} elseif ( $timestamp > $now ) {
 			/* translators: %s: a time span such as "5 minutes". */
 			$text = sprintf( __( 'in %s', 'block-doctor' ), $span );

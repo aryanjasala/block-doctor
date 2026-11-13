@@ -74,7 +74,7 @@ On the Plugins screen, Deactivate and Delete for a plugin whose blocks posts use
 
 ### Who sees what
 
-The tab and its CSV only count and list post types the person may edit other people's posts in (the post type's own `edit_others_posts` capability), and each listed post also needs `edit_post`. An editor never sees titles, counts or edit links for a post type with capabilities of its own. The scan report, its CSV and the `list-issues` ability only list posts the person may edit, as the fixes always did.
+The tab and its CSV only count and list post types the person may edit other people's posts in (the post type's own `edit_others_posts` capability), and each listed post also needs `edit_post`. An editor never sees titles, counts or edit links for a post type with capabilities of its own. The scan report, its CSV and the `list-issues` ability only list posts the person may edit, as the fixes always did. The server scan started from the screen or the `run-server-scan` ability checks and stores only posts the person may edit (a scan carried on by WP-Cron keeps the starter's rights), and the counts in the summary cover those posts too. WP-CLI has no user, so it checks every post.
 
 ## Hooks
 
