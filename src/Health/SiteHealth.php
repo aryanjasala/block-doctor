@@ -10,6 +10,7 @@ namespace AryanX\Axle\BlockDoctor\Health;
 use AryanX\Axle\BlockDoctor\Admin\AxleUi;
 use AryanX\Axle\BlockDoctor\Admin\Page;
 use AryanX\Axle\BlockDoctor\Deactivation;
+use AryanX\Axle\BlockDoctor\Keeper;
 use AryanX\Axle\BlockDoctor\Report;
 use AryanX\Axle\BlockDoctor\Service;
 use AryanX\Axle\BlockDoctor\Usage;
@@ -44,16 +45,25 @@ final class SiteHealth implements Service {
 	private Deactivation $deactivation;
 
 	/**
+	 * Blocks kept as HTML.
+	 *
+	 * @var Keeper|null
+	 */
+	private ?Keeper $keeper;
+
+	/**
 	 * Sets up the checks.
 	 *
 	 * @param Report       $report       The report.
 	 * @param Usage        $usage        The block usage index.
 	 * @param Deactivation $deactivation Blocks left behind by plugins and themes that are off.
+	 * @param Keeper|null  $keeper       Blocks kept as HTML.
 	 */
-	public function __construct( Report $report, Usage $usage, Deactivation $deactivation ) {
+	public function __construct( Report $report, Usage $usage, Deactivation $deactivation, ?Keeper $keeper = null ) {
 		$this->report       = $report;
 		$this->usage        = $usage;
 		$this->deactivation = $deactivation;
+		$this->keeper       = $keeper;
 	}
 
 	/**
@@ -79,6 +89,12 @@ final class SiteHealth implements Service {
 				'label' => __( 'Blocks of plugins and themes that are off', 'block-doctor' ),
 				'test'  => array( $this, 'run_orphans' ),
 			);
+			if ( $this->keeper ) {
+				$tests['direct']['block_doctor_kept'] = array(
+					'label' => __( 'Blocks kept as HTML while their plugin is on', 'block-doctor' ),
+					'test'  => array( $this, 'run_kept' ),
+				);
+			}
 		}
 
 		return $tests;
@@ -191,6 +207,57 @@ final class SiteHealth implements Service {
 		$result['label']       = sprintf( _n( '%s post uses blocks from a plugin or theme that is off', '%s posts use blocks from a plugin or theme that is off', $posts, 'block-doctor' ), number_format_i18n( $posts ) );
 		$result['description'] = '<p>' . esc_html__( 'The editor shows these blocks as unregistered, and visitors may see nothing in their place. Switch the plugin or theme back on, or fix the posts with Block Doctor.', 'block-doctor' ) . '</p><ul>' . implode( '', $items ) . '</ul>';
 		$result['actions']     = sprintf( '<p><a href="%s">%s</a></p>', esc_url( Page::url() ), esc_html__( 'Open Block Doctor to fix them', 'block-doctor' ) );
+
+		return $result;
+	}
+
+	/**
+	 * Blocks Block Doctor kept as HTML for a plugin that is on again, and that nobody put back.
+	 *
+	 * @return array
+	 */
+	public function run_kept(): array {
+		$result = array(
+			'label'       => __( 'No blocks are kept as HTML while their plugin is on', 'block-doctor' ),
+			'status'      => 'good',
+			'badge'       => array(
+				'label' => __( 'Content', 'block-doctor' ),
+				'color' => 'blue',
+			),
+			'description' => '<p>' . esc_html__( 'Every dynamic block that Block Doctor saved as HTML belongs to a plugin that is off, or has been put back.', 'block-doctor' ) . '</p>',
+			'actions'     => '',
+			'test'        => 'block_doctor_kept',
+		);
+
+		$waiting = $this->keeper ? $this->keeper->waiting() : array();
+		if ( ! $waiting ) {
+			return $result;
+		}
+
+		$items  = array();
+		$blocks = 0;
+		foreach ( $waiting as $key => $run ) {
+			$blocks += $run['kept']['blocks'];
+			$items[] = sprintf(
+				/* translators: 1: plugin name, 2: number of blocks. */
+				'<li>%s</li>',
+				esc_html(
+					sprintf(
+						/* translators: 1: plugin name, 2: number of blocks. */
+						_n( '%1$s: %2$s block', '%1$s: %2$s blocks', $run['kept']['blocks'], 'block-doctor' ),
+						'' !== $run['name'] ? $run['name'] : $key,
+						number_format_i18n( $run['kept']['blocks'] )
+					)
+				)
+			);
+		}
+
+		$result['status']         = 'recommended';
+		$result['badge']['color'] = 'orange';
+		/* translators: %s: number of blocks. */
+		$result['label']       = sprintf( _n( '%s block is frozen as HTML although its plugin is on', '%s blocks are frozen as HTML although their plugin is on', $blocks, 'block-doctor' ), number_format_i18n( $blocks ) );
+		$result['description'] = '<p>' . esc_html__( 'They show what they showed when they were kept, and no longer follow the plugin. Put the blocks back to get the live blocks again.', 'block-doctor' ) . '</p><ul>' . implode( '', $items ) . '</ul>';
+		$result['actions']     = sprintf( '<p><a href="%s">%s</a></p>', esc_url( admin_url( 'plugins.php' ) ), esc_html__( 'Open the Plugins screen to put them back', 'block-doctor' ) );
 
 		return $result;
 	}

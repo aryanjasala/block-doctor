@@ -3,7 +3,7 @@
 // plugin, and a clean slate between tests.
 const { wp, wpEval } = require( './utils' );
 
-const OPTIONS = [ 'block_doctor_index', 'block_doctor_scan', 'block_doctor_server_scan', 'block_doctor_batches', 'block_doctor_js_blocks', 'block_doctor_usage_scan', 'block_doctor_providers', 'block_doctor_js_sources', 'block_doctor_affected' ];
+const OPTIONS = [ 'block_doctor_index', 'block_doctor_scan', 'block_doctor_server_scan', 'block_doctor_batches', 'block_doctor_js_blocks', 'block_doctor_usage_scan', 'block_doctor_providers', 'block_doctor_js_sources', 'block_doctor_affected', 'block_doctor_keep' ];
 
 // Markup that is broken the same way on WordPress 6.6, 6.9 and 7.x.
 const MARKUP = {
@@ -113,6 +113,30 @@ add_action( 'enqueue_block_editor_assets', function () {
 	'acme-gallery/js-only.js': "wp.blocks.registerBlockType( 'acme/js-only', { title: 'Acme JS only', category: 'text', edit: function () { return null; }, save: function () { return null; } } );",
 };
 
+// A plugin with dynamic blocks (no saved HTML, the plugin's code draws them): one that renders in its post's
+// context, one that greets the logged-in user by name, one with a security token, and a contact form.
+const EVENTS = {
+	'acme-events/acme-events.php': `<?php
+/**
+ * Plugin Name: Acme Events
+ */
+add_action( 'init', function () {
+	register_block_type( 'acme/events', array( 'render_callback' => function () {
+		return '<ul class="acme-events" data-for="' . esc_attr( get_the_title() ) . '"><li>Bake sale</li><li>Open day</li></ul>';
+	} ) );
+	register_block_type( 'acme/greeting', array( 'render_callback' => function () {
+		return is_user_logged_in() ? '<p>Hello ' . esc_html( wp_get_current_user()->display_name ) . '</p>' : '<p>Hello guest</p>';
+	} ) );
+	register_block_type( 'acme/poll', array( 'render_callback' => function () {
+		return '<div class="acme-poll" data-token="' . esc_attr( wp_create_nonce( 'acme-poll' ) ) . '">Vote</div>';
+	} ) );
+	register_block_type( 'acme/contact-form', array( 'render_callback' => function () {
+		return '<p>Write to us</p>';
+	} ) );
+} );
+`,
+};
+
 // A post type with capabilities of its own, which editors do not have.
 const SECRET_TYPE = `<?php
 add_action( 'init', function () {
@@ -175,14 +199,50 @@ function installAcme() {
 	return ids;
 }
 
-/** Removes the Acme Gallery plugin and the secret post type. */
+/** Removes the Acme Gallery and Acme Events plugins. */
 function removeAcme() {
-	wpEval( `if ( is_dir( WP_PLUGIN_DIR . '/acme-gallery' ) ) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; if ( is_plugin_active( 'acme-gallery/acme-gallery.php' ) ) { deactivate_plugins( 'acme-gallery/acme-gallery.php', true ); } $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( WP_PLUGIN_DIR . '/acme-gallery', FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST ); foreach ( $it as $f ) { $f->isDir() ? rmdir( $f->getPathname() ) : unlink( $f->getPathname() ); } rmdir( WP_PLUGIN_DIR . '/acme-gallery' ); }` );
+	wpEval( `require_once ABSPATH . 'wp-admin/includes/plugin.php'; foreach ( array( 'acme-gallery', 'acme-events' ) as $slug ) { $dir = WP_PLUGIN_DIR . '/' . $slug; if ( ! is_dir( $dir ) ) { continue; } if ( is_plugin_active( $slug . '/' . $slug . '.php' ) ) { deactivate_plugins( $slug . '/' . $slug . '.php', true ); } $it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ), RecursiveIteratorIterator::CHILD_FIRST ); foreach ( $it as $f ) { $f->isDir() ? rmdir( $f->getPathname() ) : unlink( $f->getPathname() ); } rmdir( $dir ); }` );
 }
 
 /** Notes that Acme Gallery was switched off with its blocks in use, as turning it off on the Plugins screen does. */
 function markAffected() {
 	wpEval( "update_option( 'block_doctor_affected', array( 'plugin:acme-gallery/acme-gallery.php' => time() ), false );" );
+}
+
+// The block markup the Acme Events posts start from. Spacing and attribute order are deliberately odd: Put the blocks back must return them byte for byte.
+const EVENTS_MARKUP = {
+	events: '<!-- wp:acme/events {"count":3,   "layout":{"type":"grid"}} /-->',
+	voidEvents: '<!-- wp:acme/events /-->',
+	greeting: '<!-- wp:acme/greeting /-->',
+	poll: '<!-- wp:acme/poll {"id":7} /-->',
+	form: '<!-- wp:acme/contact-form /-->',
+};
+
+/**
+ * Installs the Acme Events plugin, active, and posts with its blocks. Returns the post IDs and the exact content of each.
+ *
+ * @return {{ids: Object<string, number>, original: Object<string, string>}} IDs and original content by name.
+ */
+function installEvents() {
+	installPluginFiles( EVENTS );
+	wp( 'plugin', 'activate', 'acme-events' );
+	const para = MARKUP.paragraph;
+	const original = {
+		page: [ para( 'Intro.' ), EVENTS_MARKUP.events, para( 'Outro.' ) ].join( '\n\n' ),
+		nested: `<!-- wp:group -->\n<div class="wp-block-group">${ para( 'Inside.' ) }\n\n${ EVENTS_MARKUP.voidEvents }</div>\n<!-- /wp:group -->`,
+		mixed: [ EVENTS_MARKUP.greeting, EVENTS_MARKUP.events, EVENTS_MARKUP.poll ].join( '\n\n' ),
+		poll: EVENTS_MARKUP.poll,
+		form: EVENTS_MARKUP.form,
+		secret: [ para( 'Secret.' ), EVENTS_MARKUP.events ].join( '\n\n' ),
+	};
+	const ids = {
+		page: createPost( 'Gallery page', original.page, { post_type: 'page' } ),
+		nested: createPost( 'Nested events', original.nested ),
+		mixed: createPost( 'Mixed blocks', original.mixed ),
+		poll: createPost( 'Poll only', original.poll ),
+		form: createPost( 'Contact', original.form ),
+	};
+	return { ids, original, secret: () => createPost( 'Secret events', original.secret, { post_type: 'bd_secret' } ) };
 }
 
 /** Counts the blocks of every post, now. */
@@ -253,4 +313,4 @@ function seed() {
 	return ids;
 }
 
-module.exports = { MARKUP, OPTIONS, installAcme, removeAcme, buildUsage, markAffected, installSecretType, createPost, content, issues, option, revisions, installNoticeBlock, installShelfBlocks, installIndexCounter, indexWrites, reset, seed };
+module.exports = { MARKUP, OPTIONS, EVENTS_MARKUP, installEvents, installAcme, removeAcme, buildUsage, markAffected, installSecretType, createPost, content, issues, option, revisions, installNoticeBlock, installShelfBlocks, installIndexCounter, indexWrites, reset, seed };

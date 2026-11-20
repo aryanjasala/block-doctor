@@ -2,7 +2,7 @@
 // Run on demand: npm run screenshots
 const { test, expect } = require( './utils' );
 const { prepareSite, shot } = require( './utils/media' );
-const { MARKUP, createPost, reset, seed, installAcme, buildUsage } = require( './seed' );
+const { MARKUP, createPost, reset, seed, installAcme, installEvents, buildUsage } = require( './seed' );
 
 const SCREEN = '/wp-admin/tools.php?page=block-doctor';
 
@@ -102,11 +102,23 @@ test.describe.serial( 'Screenshots', () => {
 	} );
 
 	test( '6: the step before a plugin with blocks in use is switched off', async ( { page } ) => {
-		await page.setViewportSize( { width: 1280, height: 760 } );
+		installEvents();
+		buildUsage();
+		await page.setViewportSize( { width: 1280, height: 800 } );
 		await page.goto( '/wp-admin/plugins.php' );
-		await page.locator( 'tr[data-slug="acme-gallery"] .deactivate a' ).click();
-		await expect( page.locator( '.block-doctor-warning-row .axle-confirm' ) ).toContainText( 'Its 2 block types are used in 4 posts.' );
+		await page.locator( 'tr[data-slug="acme-events"] .deactivate a' ).click();
+		await expect( page.locator( '.block-doctor-warning-row .block-doctor-keep' ) ).toBeVisible();
 		await page.locator( '.block-doctor-warning-row' ).evaluate( ( row ) => row.scrollIntoView( { block: 'center' } ) );
 		await shot( page, 6 );
+	} );
+
+	test( '7: after keeping what the dynamic blocks show', async ( { page } ) => {
+		await page.setViewportSize( { width: 1280, height: 800 } );
+		await page.goto( '/wp-admin/plugins.php' );
+		await page.locator( 'tr[data-slug="acme-events"] .deactivate a' ).click();
+		await page.locator( '.block-doctor-keep' ).click();
+		await expect( page.locator( '.block-doctor-refused' ) ).toBeVisible( { timeout: 30_000 } );
+		await page.locator( '.block-doctor-warning-row' ).evaluate( ( row ) => row.scrollIntoView( { block: 'center' } ) );
+		await shot( page, 7 );
 	} );
 } );

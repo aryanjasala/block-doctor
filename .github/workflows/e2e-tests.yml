@@ -39,7 +39,7 @@ jobs:
             image: php8.3-apache
             core: '6.9.10'
             theme: twentytwentyfive
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

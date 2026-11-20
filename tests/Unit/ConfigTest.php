@@ -9,6 +9,7 @@ namespace AryanX\Axle\BlockDoctor\Tests\Unit;
 
 use AryanX\Axle\BlockDoctor\Config;
 use Brain\Monkey\Filters;
+use Brain\Monkey\Functions;
 
 final class ConfigTest extends PluginTestCase {
 
@@ -22,6 +23,21 @@ final class ConfigTest extends PluginTestCase {
 		Filters\expectApplied( 'block_doctor_capability' )->twice()->andReturn( '', array( 'x' ) );
 		$this->assertSame( 'edit_others_posts', $config->capability() );
 		$this->assertSame( 'edit_others_posts', $config->capability() );
+	}
+
+	public function test_clearing_every_result_needs_manage_options_unless_a_filter_says_otherwise(): void {
+		$config = new Config();
+		Functions\when( 'current_user_can' )->alias( static fn( $cap ) => in_array( $cap, array( 'edit_others_posts' ), true ) );
+		$this->assertSame( 'manage_options', $config->clear_capability() );
+		$this->assertFalse( $config->can_clear(), 'an editor may use Block Doctor but not wipe the site\'s results' );
+
+		Functions\when( 'current_user_can' )->justReturn( true );
+		$this->assertTrue( $config->can_clear() );
+
+		Filters\expectApplied( 'block_doctor_clear_capability' )->once()->andReturn( 'edit_others_posts' );
+		$this->assertSame( 'edit_others_posts', $config->clear_capability() );
+		Filters\expectApplied( 'block_doctor_clear_capability' )->once()->andReturn( '' );
+		$this->assertSame( 'manage_options', $config->clear_capability(), 'a bad filter falls back' );
 	}
 
 	public function test_can_use_checks_the_capability(): void {
@@ -104,7 +120,7 @@ final class ConfigTest extends PluginTestCase {
 	public function test_issue_kinds_can_be_added_and_removed_but_only_the_built_in_ones_are_fixable(): void {
 		$config = new Config();
 		$kinds  = $config->issue_kinds();
-		$this->assertSame( array( 'invalid', 'missing', 'classic', 'deprecated', 'empty', 'pattern-ref', 'navigation-ref', 'missing-media', 'error' ), array_keys( $kinds ) );
+		$this->assertSame( array( 'invalid', 'missing', 'classic', 'deprecated', 'empty', 'pattern-ref', 'navigation-ref', 'missing-media', 'hidden', 'error' ), array_keys( $kinds ) );
 		$this->assertFalse( $kinds['error']['broken'], 'a post the scan could not check is not counted as broken' );
 		$this->assertSame( '', $kinds['error']['fix'] );
 		$this->assertSame( 'browser', $kinds['invalid']['fix'] );

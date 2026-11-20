@@ -98,6 +98,13 @@ final class Plugin {
 	private Deactivation $deactivation;
 
 	/**
+	 * Keeps what a plugin's dynamic blocks show.
+	 *
+	 * @var Keeper
+	 */
+	private Keeper $keeper;
+
+	/**
 	 * Starts the plugin. Runs on `plugins_loaded`.
 	 */
 	public static function boot(): void {
@@ -139,6 +146,7 @@ final class Plugin {
 		$this->providers    = new Providers();
 		$this->usage        = new Usage( $this->config, $this->posts, $this->providers );
 		$this->deactivation = new Deactivation( $this->config, $this->usage, $this->providers );
+		$this->keeper       = new Keeper( $this->config, $this->posts, $this->providers, $this->batches, $this->fixer );
 	}
 
 	/**
@@ -223,6 +231,15 @@ final class Plugin {
 	}
 
 	/**
+	 * Keeps what a plugin's dynamic blocks show.
+	 *
+	 * @return Keeper
+	 */
+	public function keeper(): Keeper {
+		return $this->keeper;
+	}
+
+	/**
 	 * Registers the services.
 	 */
 	private function register(): void {
@@ -231,10 +248,11 @@ final class Plugin {
 			$this->scanner,
 			$this->usage,
 			$this->deactivation,
-			new Controller( $this->config, $this->posts, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report, $this->usage, $this->providers, $this->deactivation ),
+			$this->keeper,
+			new Controller( $this->config, $this->posts, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report, $this->usage, $this->providers, $this->deactivation, $this->keeper ),
 			new Page( $this->config, $this->report, $this->usage ),
 			new Dashboard( $this->config, $this->report ),
-			new SiteHealth( $this->report, $this->usage, $this->deactivation ),
+			new SiteHealth( $this->report, $this->usage, $this->deactivation, $this->keeper ),
 			new Abilities( $this->config, $this->posts, $this->issues, $this->scanner, $this->fixer, $this->report, $this->usage, $this->providers ),
 		);
 
@@ -243,7 +261,7 @@ final class Plugin {
 		}
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			\WP_CLI::add_command( 'block-doctor', new Command( $this->config, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report, $this->usage, $this->providers ) );
+			\WP_CLI::add_command( 'block-doctor', new Command( $this->config, $this->issues, $this->scanner, $this->batches, $this->fixer, $this->report, $this->usage, $this->providers, $this->keeper ) );
 		}
 	}
 }

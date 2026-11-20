@@ -39,6 +39,8 @@ After a migration, a block plugin update or a plugin removal, posts open with "T
 - **Undo batch** restores every post from the revision saved before its fix, and skips posts edited since
 - **Block usage**: every block type on the site, who provides it (WordPress, a plugin, a theme or unknown), how many posts use it, how often and where in each post, with search, filters and a CSV download
 - **A warning before you switch a plugin off**: Deactivate and Delete on the Plugins screen show "Its 3 block types are used in 212 posts" with the most affected posts and a link to the full list, then Continue or Cancel. A notice and a Site Health test follow when blocks are left behind
+- **Keep what a plugin's dynamic blocks show**: before you switch the plugin off, each of its dynamic blocks is saved as the HTML it shows today, with a revision, an Undo batch, and **Put the blocks back** after. Blocks that depend on the visitor (forms, carts, security tokens, user-specific output) are refused and listed
+- **A Hidden view** in the report for blocks hidden with block visibility: hidden on every screen, or hidden with CSS on some screens while the text still ships in the HTML
 - **CSV download**, a **dashboard widget**, a **Site Health** check, **WP-CLI**, **abilities** for AI agents, and PHP and JavaScript hooks for every default and event
 
 ## Install
@@ -82,7 +84,10 @@ Invalid markup needs the browser, so finding and fixing it happens on **Tools > 
   </tr>
   <tr>
     <td width="50%" valign="top"><img src=".wordpress-org/screenshot-5.png" alt="The Block usage tab: every block type, who provides it, and the posts that use it, with the position of the block in each"><br><sub>The Block usage tab: every block type, who provides it, and the posts that use it, with the position of the block in each</sub></td>
-    <td width="50%" valign="top"><img src=".wordpress-org/screenshot-6.png" alt="The step on the Plugins screen before a plugin whose blocks posts use is switched off"><br><sub>The step on the Plugins screen before a plugin whose blocks posts use is switched off</sub></td>
+    <td width="50%" valign="top"><img src=".wordpress-org/screenshot-6.png" alt="The step on the Plugins screen before a plugin whose blocks posts use is switched off: how many of its blocks are dynamic, and a button that keeps what they show first"><br><sub>The step on the Plugins screen before a plugin whose blocks posts use is switched off: how many of its blocks are dynamic, and a button that keeps what they show first</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src=".wordpress-org/screenshot-7.png" alt="After keeping: what was saved as HTML, with Undo batch, and the blocks that were refused because they depend on the visitor"><br><sub>After keeping: what was saved as HTML, with Undo batch, and the blocks that were refused because they depend on the visitor</sub></td>
   </tr>
 </table>
 
@@ -153,7 +158,7 @@ Small plugins that each fill one gap in WordPress, all free with no pro version.
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-review/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Review](https://github.com/aryanjasala/axle-review) | Share drafts through private links, collect outside feedback as block Notes, and know when an approval is out of date |
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-runtime-doctor/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Runtime Doctor](https://github.com/aryanjasala/axle-runtime-doctor) | Check OPcache coverage, the object cache, PHP support and limits, cron and more, with the fix for your host |
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-smoke-test/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Smoke Test](https://github.com/aryanjasala/axle-smoke-test) | Check key pages after every update or deploy, see what broke and roll it back |
-| <img src="https://raw.githubusercontent.com/aryanjasala/block-theme-ops/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Theme Ops](https://github.com/aryanjasala/block-theme-ops) | Find Site Editor changes that override your theme files, see the diff, reset them, send them to Git, move them to another site or lock them |
+| <img src="https://raw.githubusercontent.com/aryanjasala/block-theme-ops/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Theme Ops](https://github.com/aryanjasala/block-theme-ops) | Find Site Editor changes that override your theme files, merge a theme update into them, reset them, send them to Git, move them to another site or lock them |
 | <img src="https://raw.githubusercontent.com/aryanjasala/role-right-sizer/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Role Right-Sizer](https://github.com/aryanjasala/role-right-sizer) | Recommends the smallest role each user needs, from what they actually do |
 | <img src="https://raw.githubusercontent.com/aryanjasala/update-rehearsal/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Update Rehearsal](https://github.com/aryanjasala/update-rehearsal) | Try plugin, theme, core and PHP updates, a new plugin, or life without one, on a disposable copy of your site in WordPress Playground first |
 | <img src="https://raw.githubusercontent.com/aryanjasala/user-session-manager/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [User Session Manager](https://github.com/aryanjasala/user-session-manager) | See every device signed in, sign out one, and limit sessions per role |

@@ -40,6 +40,7 @@ final class DeactivationTest extends PluginTestCase {
 		);
 		Functions\when( 'wp_json_encode' )->alias( 'json_encode' );
 		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'is_network_admin' )->justReturn( false );
 		Functions\when( 'get_post_type_object' )->alias(
 			static fn( $type ) => (object) array(
 				'labels' => (object) array( 'singular_name' => ucfirst( (string) $type ) ),
@@ -142,6 +143,46 @@ final class DeactivationTest extends PluginTestCase {
 		$this->assertSame( array( 'theme:acme-theme' ), array_keys( $this->options[ Deactivation::AFFECTED ] ) );
 	}
 
+	public function test_switching_away_from_a_child_theme_also_notes_its_parent(): void {
+		$this->options[ Providers::REMEMBERED ]['acme/card'] = array( 'type' => 'theme', 'slug' => 'acme-parent', 'name' => 'Acme Parent', 'basename' => '' );
+		$this->db->rows['GROUP BY m.meta_key']               = array( array( 'meta_key' => Usage::PREFIX . 'acme/card', 'posts' => '4', 'uses' => '4', 'last' => '2026-11-02 10:00:00' ) );
+		$this->db->vars['COUNT(DISTINCT']                    = '4';
+
+		$child  = new class() extends \WP_Theme {
+			public function get_stylesheet() {
+				return 'acme-child';
+			}
+			public function get_template() {
+				return 'acme-parent';
+			}
+		};
+		$next   = new class() extends \WP_Theme {
+			public function get_stylesheet() {
+				return 'next-theme';
+			}
+			public function get_template() {
+				return 'next-theme';
+			}
+		};
+		$parent = new class() extends \WP_Theme {
+			public function get_stylesheet() {
+				return 'acme-parent';
+			}
+			public function get_template() {
+				return 'acme-parent';
+			}
+		};
+
+		// To another theme: the child and the parent are both off. The parent's blocks get a note.
+		$this->plugin()['deactivation']->on_switch_theme( 'Next', $next, $child );
+		$this->assertContains( 'theme:acme-parent', array_keys( $this->options[ Deactivation::AFFECTED ] ) );
+
+		// To the parent itself: it is still on, so nothing is noted for it.
+		unset( $this->options[ Deactivation::AFFECTED ] );
+		$this->plugin()['deactivation']->on_switch_theme( 'Acme Parent', $parent, $child );
+		$this->assertArrayNotHasKey( Deactivation::AFFECTED, $this->options );
+	}
+
 	public function test_the_notice_says_what_happened_and_goes_away_when_nothing_is_left_to_fix(): void {
 		$this->options[ Deactivation::AFFECTED ] = array( self::KEY => 1, 'plugin:gone/gone.php' => 1 );
 		Functions\when( 'get_current_screen' )->justReturn( (object) array( 'id' => 'plugins' ) );
@@ -236,8 +277,8 @@ final class DeactivationTest extends PluginTestCase {
 
 		$this->plugin()['deactivation']->enqueue_plugins_screen();
 
-		$this->assertSame( array( 'block-doctor-plugins' ), $queued );
-		$this->assertStringContainsString( '{"plugins":{"acme-blocks\/acme-blocks.php":1}}', $inline );
+		$this->assertContains( 'block-doctor-plugins', $queued );
+		$this->assertStringContainsString( '{"plugins":{"acme-blocks\/acme-blocks.php":1},"keep":true,', $inline );
 	}
 
 	public function test_deactivating_on_the_command_line_prints_a_warning_and_blocks_nothing(): void {

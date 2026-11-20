@@ -119,7 +119,7 @@ final class AdminTest extends PluginTestCase {
 		Actions\expectDone( 'enqueue_block_editor_assets' )->once();
 		$page->enqueue();
 
-		$this->assertSame( array( 'wp-blocks', 'wp-block-library', 'wp-format-library', 'wp-block-editor', 'acme-shelf-editor-script', 'block-doctor-admin' ), $queued );
+		$this->assertSame( array( 'wp-blocks', 'wp-block-library', 'wp-format-library', 'wp-block-editor', 'acme-shelf-editor-script', 'block-doctor-admin', 'block-doctor-axle-ui' ), $queued );
 		$this->assertStringContainsString( 'wp-blocks: wp.blocks.unstable__bootstrapServerSideBlockDefinitions(', $inline[0] );
 		$this->assertStringContainsString( 'window.blockDoctorSources', $inline[2] );
 		$this->assertStringContainsString( 'block-doctor-admin: window.blockDoctorData = ', $inline[3] );

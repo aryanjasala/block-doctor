@@ -2,8 +2,9 @@
  * Plugins screen: before Deactivate or Delete runs for a plugin that provides
  * blocks, shows an in-place step with how many posts use those blocks.
  *
- * Block Doctor never blocks anything. The step has Continue and Cancel, and
- * when the check fails Continue still works.
+ * Block Doctor never blocks anything. The step has Cancel (focused), a button
+ * that keeps what the plugin's dynamic blocks show first, and a continue
+ * button. When the check fails Continue still works.
  *
  * JavaScript hooks (wp.hooks):
  * - action blockDoctor.deactivationContinue ( plugin, action ): someone chose to carry on after the warning. `action` is deactivate or delete.
@@ -52,6 +53,35 @@
 			return checked.length === 1 && checked[ 0 ] ? { action: 'delete', plugin: checked[ 0 ] } : null;
 		}
 		return null;
+	}
+
+	/**
+	 * What happens to the blocks, for the step. Dynamic blocks have no saved HTML, so nothing can convert them later.
+	 *
+	 * @param {string} action  `deactivate` or `delete`.
+	 * @param {Object} dynamic `blocks` (dynamic block types in use), `posts` (posts that use them), `can_keep`.
+	 * @param {Object} i18n    wp.i18n functions.
+	 * @return {string} The sentence.
+	 */
+	function consequence( action, dynamic, i18n ) {
+		const { __, _n, sprintf } = i18n || ( typeof window !== 'undefined' && window.wp ? window.wp.i18n : {} );
+		if ( dynamic && dynamic.blocks > 0 ) {
+			const drawn = sprintf(
+				/* translators: 1: number of dynamic block types, 2: number of posts. */
+				_n( '%1$s of its block types is dynamic, in %2$s posts: the plugin draws it each time the page loads, so no HTML is saved.', '%1$s of its block types are dynamic, in %2$s posts: the plugin draws them each time the page loads, so no HTML is saved.', dynamic.blocks, 'block-doctor' ),
+				dynamic.blocks,
+				dynamic.posts
+			);
+			const after =
+				action === 'delete'
+					? __( 'Once its files are deleted they show nothing, and Block Doctor cannot convert them afterwards. You would have to install the plugin again to get them back.', 'block-doctor' )
+					: __( 'Once it is off they show nothing, and Block Doctor cannot convert them afterwards. Turn the plugin back on to get them back.', 'block-doctor' );
+			const keep = dynamic.can_keep ? ' ' + __( 'Keep what they show saves their output as HTML first, with Undo, and refuses blocks that show different things to different visitors.', 'block-doctor' ) : '';
+			return drawn + ' ' + after + keep;
+		}
+		return action === 'delete'
+			? __( 'Deleting removes its files, so you would have to install it again to get the blocks back. Until then the editor shows them as unregistered. Block Doctor can fix the posts afterwards, with a preview and Undo.', 'block-doctor' )
+			: __( 'If you deactivate it, the editor shows these blocks as unregistered. Turn the plugin back on to get them back, or fix the posts with Block Doctor afterwards, with a preview and Undo.', 'block-doctor' );
 	}
 
 	function boot( win ) {
@@ -111,21 +141,38 @@
 			const checking = node( 'div', { class: 'axle-confirm', role: 'status' }, node( 'p', {}, node( 'span', { class: 'spinner is-active' } ), __( 'Checking where its blocks are used...', 'block-doctor' ) ) );
 			box.appendChild( checking );
 
-			const show = ( sentence, extra, tone ) => {
+			/**
+			 * Shows the step.
+			 *
+			 * @param {string}   sentence What is at stake, in bold.
+			 * @param {Node[]}   extra    More paragraphs and lists.
+			 * @param {Object}   options  `keep` (a warning with dynamic blocks that can be kept), `plain` (no list of posts, just the choice).
+			 */
+			const show = ( sentence, extra, options ) => {
+				const settings = options || {};
 				const verb = info.action === 'delete' ? __( 'Delete anyway', 'block-doctor' ) : __( 'Deactivate anyway', 'block-doctor' );
-				const group = node( 'div', { class: 'axle-confirm' + ( tone ? ' axle-confirm--' + tone : '' ), role: 'group', 'aria-labelledby': id, tabindex: '-1' } );
+				const group = node( 'div', { class: 'axle-confirm axle-confirm--danger', role: 'group', 'aria-labelledby': id } );
 				group.appendChild( node( 'p', { id }, node( 'strong', { text: sentence } ) ) );
 				( extra || [] ).forEach( ( part ) => group.appendChild( part ) );
 				const actions = node( 'div', { class: 'axle-actions' } );
-				const go = node( 'button', { type: 'button', class: 'button button-primary block-doctor-continue', text: verb } );
-				const cancel = node( 'button', { type: 'button', class: 'button block-doctor-cancel', text: __( 'Cancel', 'block-doctor' ) } );
+				const cancel = node( 'button', { type: 'button', class: 'button button-primary block-doctor-cancel', text: __( 'Cancel', 'block-doctor' ) } );
+				cancel.addEventListener( 'click', close );
+				actions.appendChild( cancel );
+				if ( settings.keep ) {
+					const keep = node( 'button', {
+						type: 'button',
+						class: 'button block-doctor-keep',
+						text: info.action === 'delete' ? __( 'Keep what they show, then delete', 'block-doctor' ) : __( 'Keep what they show, then deactivate', 'block-doctor' ),
+					} );
+					keep.addEventListener( 'click', () => keepThenContinue( group, settings.keep ) );
+					actions.appendChild( keep );
+				}
+				const go = node( 'button', { type: 'button', class: 'button axle-button--danger block-doctor-continue', text: settings.goLabel || verb } );
 				go.addEventListener( 'click', () => {
 					row.remove();
 					carryOn( link, info );
 				} );
-				cancel.addEventListener( 'click', close );
 				actions.appendChild( go );
-				actions.appendChild( cancel );
 				group.appendChild( actions );
 				group.addEventListener( 'keydown', ( event ) => {
 					if ( event.key === 'Escape' ) {
@@ -134,8 +181,85 @@
 				} );
 				box.replaceChildren( group );
 				row.setAttribute( 'aria-busy', 'false' );
-				group.focus();
+				cancel.focus();
 				speak( sentence );
+			};
+
+			/** Keeps what the plugin's dynamic blocks show, a chunk of posts at a time, then carries on. */
+			const keepThenContinue = ( group, summary ) => {
+				const provider = 'plugin:' + info.plugin;
+				const progress = node( 'p', { class: 'block-doctor-progress', role: 'status' }, node( 'span', { class: 'spinner is-active' } ), __( 'Keeping what the blocks show...', 'block-doctor' ) );
+				group.querySelectorAll( 'button' ).forEach( ( button ) => ( button.disabled = true ) );
+				group.querySelector( '.axle-actions' ).before( progress );
+
+				const fail = ( error ) => {
+					progress.remove();
+					const message = error && error.message ? error.message : __( 'Something went wrong.', 'block-doctor' );
+					group.querySelector( '.axle-actions' ).before( node( 'p', { class: 'block-doctor-error', role: 'alert', text: message } ) );
+					group.querySelectorAll( 'button' ).forEach( ( button ) => ( button.disabled = false ) );
+					group.querySelector( '.block-doctor-keep' ).remove();
+					group.querySelector( '.block-doctor-cancel' ).focus();
+				};
+
+				const run = ( restart ) =>
+					wp.apiFetch( { path: '/block-doctor/v1/keep', method: 'POST', data: { provider, restart } } ).then( ( result ) => {
+						const text = sprintf(
+							/* translators: 1: posts checked so far, 2: all posts. */
+							__( 'Keeping what the blocks show: %1$s of %2$s posts checked.', 'block-doctor' ),
+							result.done,
+							result.total || summary.posts
+						);
+						progress.lastChild.textContent = text;
+						if ( result.status === 'running' ) {
+							return run( false );
+						}
+						return result;
+					} );
+
+				run( true )
+					.then( ( result ) => finished( result, group ) )
+					.catch( fail );
+			};
+
+			/** After a keep run: carry on when nothing was refused, else list what stays as it is and let the person choose. */
+			const finished = ( result, group ) => {
+				const kept = sprintf(
+					/* translators: 1: number of blocks, 2: number of posts. */
+					_n( 'Kept %1$s block in %2$s posts.', 'Kept %1$s blocks in %2$s posts.', result.kept, 'block-doctor' ),
+					result.kept,
+					result.kept_posts
+				);
+				if ( ! result.refused_n && ! result.not_yours ) {
+					speak( kept );
+					row.remove();
+					carryOn( link, info );
+					return;
+				}
+
+				const extra = [];
+				extra.push(
+					node(
+						'p',
+						{},
+						result.kept ? kept + ' ' : '',
+						result.batch ? node( 'a', { href: data.undoUrl, text: sprintf( /* translators: %s: batch number. */ __( 'Undo batch #%s', 'block-doctor' ), result.batch ) } ) : ''
+					)
+				);
+				if ( result.refused.length ) {
+					extra.push( node( 'p', { text: sprintf( /* translators: %s: number of blocks. */ _n( '%s block was left as it is, because it cannot be kept as HTML:', '%s blocks were left as they are, because they cannot be kept as HTML:', result.refused_n, 'block-doctor' ), result.refused_n ) } ) );
+					const list = node( 'ul', { class: 'block-doctor-refused' } );
+					result.refused.forEach( ( post ) => {
+						post.blocks.forEach( ( block ) => {
+							list.appendChild( node( 'li', {}, node( 'a', { href: post.edit_link, text: post.title } ), ' ' + ( block.name ? block.name + ': ' : '' ) + block.message ) );
+						} );
+					} );
+					extra.push( list );
+				}
+				if ( result.not_yours ) {
+					extra.push( node( 'p', { text: sprintf( /* translators: %s: number of posts. */ _n( '%s post you cannot edit was not touched.', '%s posts you cannot edit were not touched.', result.not_yours, 'block-doctor' ), result.not_yours ) } ) );
+				}
+				const sentence = __( 'Some blocks stay dynamic.', 'block-doctor' );
+				show( sentence, extra, { goLabel: info.action === 'delete' ? __( 'Delete', 'block-doctor' ) : __( 'Deactivate', 'block-doctor' ) } );
 			};
 
 			wp.apiFetch( { path: '/block-doctor/v1/usage/warning?provider=' + encodeURIComponent( 'plugin:' + info.plugin ) } )
@@ -173,18 +297,12 @@
 							'p',
 							{},
 							node( 'a', { href: warning.url, class: 'block-doctor-all-posts', text: sprintf( /* translators: %s: number of posts. */ _n( 'See the %s post', 'See all %s posts', warning.posts, 'block-doctor' ), warning.posts ) } )
-						),
-						node(
-							'p',
-							{
-								text:
-									info.action === 'delete'
-										? __( 'Deleting removes its files, so you would have to install it again to get the blocks back. Until then the editor shows them as unregistered. Block Doctor can fix the posts afterwards, with a preview and Undo.', 'block-doctor' )
-										: __( 'If you deactivate it, the editor shows these blocks as unregistered. Turn the plugin back on to get them back, or fix the posts with Block Doctor afterwards, with a preview and Undo.', 'block-doctor' ),
-							}
 						)
 					);
-					show( intro, extra );
+
+					const dynamic = warning.dynamic || { blocks: 0, posts: 0, can_keep: false };
+					extra.push( node( 'p', { class: 'block-doctor-consequence', text: consequence( info.action, dynamic, wp.i18n ) } ) );
+					show( intro, extra, { keep: dynamic.can_keep && data.keep !== false ? dynamic : null } );
 				} )
 				.catch( () => {
 					show( __( 'Block Doctor could not check where this plugin\'s blocks are used.', 'block-doctor' ), [ node( 'p', { text: __( 'Nothing is blocked. You can carry on, or cancel and try again in a moment.', 'block-doctor' ) } ) ] );
@@ -210,5 +328,5 @@
 		);
 	}
 
-	return { parseLink, boot };
+	return { parseLink, consequence, boot };
 } );

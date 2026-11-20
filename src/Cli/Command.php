@@ -11,6 +11,8 @@ use AryanX\Axle\BlockDoctor\Batches;
 use AryanX\Axle\BlockDoctor\Config;
 use AryanX\Axle\BlockDoctor\Fixer;
 use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Keeper;
+use AryanX\Axle\BlockDoctor\Plugin;
 use AryanX\Axle\BlockDoctor\Providers;
 use AryanX\Axle\BlockDoctor\Report;
 use AryanX\Axle\BlockDoctor\Scanner;
@@ -84,6 +86,13 @@ final class Command {
 	private Providers $providers;
 
 	/**
+	 * Keeps what a plugin's dynamic blocks show.
+	 *
+	 * @var Keeper|null
+	 */
+	private ?Keeper $keeper;
+
+	/**
 	 * Sets up the command.
 	 *
 	 * @param Config    $config    Defaults and limits.
@@ -94,8 +103,9 @@ final class Command {
 	 * @param Report    $report    The report.
 	 * @param Usage     $usage     The block usage index.
 	 * @param Providers $providers Where each block type comes from.
+	 * @param Keeper    $keeper    Keeps what a plugin's dynamic blocks show.
 	 */
-	public function __construct( Config $config, Issues $issues, Scanner $scanner, Batches $batches, Fixer $fixer, Report $report, Usage $usage, Providers $providers ) {
+	public function __construct( Config $config, Issues $issues, Scanner $scanner, Batches $batches, Fixer $fixer, Report $report, Usage $usage, Providers $providers, ?Keeper $keeper = null ) {
 		$this->config    = $config;
 		$this->issues    = $issues;
 		$this->scanner   = $scanner;
@@ -104,6 +114,7 @@ final class Command {
 		$this->report    = $report;
 		$this->usage     = $usage;
 		$this->providers = $providers;
+		$this->keeper    = $keeper;
 	}
 
 	/**
@@ -388,6 +399,122 @@ final class Command {
 			\WP_CLI::warning( sprintf( 'Skipped post %d: %s.', $post_id, self::reason( (string) $reason ) ) );
 		}
 		\WP_CLI::success( sprintf( 'Batch %d undone: %d posts restored, %d skipped.', (int) $args[0], count( $result['batch']['restored'] ), count( $result['batch']['skipped'] ) ) );
+	}
+
+	/**
+	 * Saves what a plugin's dynamic blocks show as Custom HTML, while the plugin is still on.
+	 *
+	 * Each dynamic block is rendered in its post and saved as a Custom HTML block,
+	 * a revision first, as one batch that `undo-batch` undoes. Blocks whose output
+	 * depends on the visitor (forms, carts, security tokens, user-specific output)
+	 * are refused and listed. Posts the user cannot edit are never touched.
+	 * Needs a user: pass --user.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <plugin>
+	 * : Plugin file, such as acme-events/acme-events.php, or its folder name.
+	 *
+	 * [--dry-run]
+	 * : Only count its dynamic blocks and the posts that use them.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp block-doctor keep acme-events/acme-events.php --user=admin
+	 *     wp block-doctor keep acme-events --dry-run
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Named arguments.
+	 */
+	public function keep( array $args, array $assoc_args ): void {
+		$key     = $this->plugin_key( (string) $args[0] );
+		$keeper  = $this->keeper ?? Plugin::instance()->keeper();
+		$summary = $keeper->summary( $key );
+		if ( ! $summary['blocks'] ) {
+			\WP_CLI::error( 'That plugin has no dynamic blocks in use, or it is not active.' );
+		}
+		\WP_CLI::log( sprintf( '%d dynamic block types, used in %d posts.', $summary['blocks'], $summary['posts'] ) );
+		if ( isset( $assoc_args['dry-run'] ) ) {
+			return;
+		}
+		if ( ! get_current_user_id() ) {
+			\WP_CLI::error( 'Pass --user=<administrator>, so each post is checked against what that user may edit.' );
+		}
+
+		$restart = true;
+		do {
+			$run = $keeper->step( $key, $restart );
+			if ( is_wp_error( $run ) ) {
+				\WP_CLI::error( $run->get_error_message() );
+			}
+			$restart = false;
+		} while ( 'running' === $run['status'] );
+
+		foreach ( $run['refused'] as $post ) {
+			foreach ( $post['blocks'] as $block ) {
+				\WP_CLI::warning( sprintf( 'Post %d: %s refused. %s', $post['id'], '' !== $block['name'] ? $block['name'] : 'a block', $block['message'] ) );
+			}
+		}
+		\WP_CLI::success( sprintf( 'Kept %d blocks in %d posts (batch %d). %d refused.', $run['kept'], $run['kept_posts'], $run['batch'], $run['refused_n'] ) );
+	}
+
+	/**
+	 * Puts the blocks back that `keep` saved as Custom HTML: the exact original markup, a revision first.
+	 *
+	 * Works on each post as it is now, so edits made since stay. Needs a user: pass --user.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <plugin>
+	 * : Plugin file, such as acme-events/acme-events.php, or its folder name.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp block-doctor put-back acme-events --user=admin
+	 *
+	 * @subcommand put-back
+	 *
+	 * @param array $args Positional arguments.
+	 */
+	public function put_back( array $args ): void {
+		if ( ! get_current_user_id() ) {
+			\WP_CLI::error( 'Pass --user=<administrator>, so each post is checked against what that user may edit.' );
+		}
+		$keeper   = $this->keeper ?? Plugin::instance()->keeper();
+		$restored = 0;
+		$skipped  = array();
+		do {
+			$result = $keeper->put_back( $this->plugin_key( (string) $args[0] ), $this->config->batch_size() );
+			if ( is_wp_error( $result ) ) {
+				\WP_CLI::error( $result->get_error_message() );
+			}
+			$restored += $result['restored'];
+			$skipped  += $result['skipped'];
+		} while ( $result['remaining'] > 0 );
+
+		foreach ( $skipped as $post_id => $reason ) {
+			\WP_CLI::warning( sprintf( 'Skipped post %d: %s.', $post_id, $reason ) );
+		}
+		\WP_CLI::success( sprintf( 'Put the blocks back in %d posts, %d skipped.', $restored, count( $skipped ) ) );
+	}
+
+	/**
+	 * A provider key from a plugin file or folder name.
+	 *
+	 * @param string $plugin Plugin file or folder.
+	 * @return string
+	 */
+	private function plugin_key( string $plugin ): string {
+		if ( false === strpos( $plugin, '/' ) ) {
+			foreach ( $this->providers->groups() as $group ) {
+				if ( 0 === strpos( (string) $group['provider']['basename'], $plugin . '/' ) ) {
+					$plugin = (string) $group['provider']['basename'];
+					break;
+				}
+			}
+		}
+
+		return 'plugin:' . $plugin;
 	}
 
 	/**

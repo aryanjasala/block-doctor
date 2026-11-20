@@ -37,6 +37,29 @@ final class Config {
 	}
 
 	/**
+	 * Capability to clear every stored result. Clearing wipes the whole site's results and both scans' progress.
+	 *
+	 * @return string
+	 */
+	public function clear_capability(): string {
+		/**
+		 * Filters who may clear the stored results of every post.
+		 *
+		 * @param string $capability Default `manage_options`.
+		 */
+		return self::text( apply_filters( 'block_doctor_clear_capability', 'manage_options' ), 'manage_options' );
+	}
+
+	/**
+	 * Whether the current user may clear the stored results.
+	 *
+	 * @return bool
+	 */
+	public function can_clear(): bool {
+		return $this->can_use() && current_user_can( $this->clear_capability() );
+	}
+
+	/**
 	 * A filtered value as a non-empty string, or the default.
 	 *
 	 * @param mixed  $value    Filtered value.
@@ -325,6 +348,12 @@ final class Config {
 				'description' => __( 'An image, cover, video, audio, file or media and text block points to an attachment that was deleted.', 'block-doctor' ),
 				'fix'         => '',
 				'broken'      => true,
+			),
+			'hidden'         => array(
+				'label'       => __( 'Hidden', 'block-doctor' ),
+				'description' => __( 'Hidden with the block visibility setting. Hidden on every screen means WordPress leaves it out of the page. Hidden on some screen sizes is CSS only: the text still ships in the HTML.', 'block-doctor' ),
+				'fix'         => '',
+				'broken'      => false,
 			),
 			'error'          => array(
 				'label'       => __( 'Not checked', 'block-doctor' ),
