@@ -466,6 +466,165 @@
           "call": "reset"
         }
       ]
+    },
+    {
+      "name": "Plugins screen step with dynamic blocks and the keep button",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installEvents",
+          "save": "events"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/plugins.php",
+      "steps": [
+        {
+          "click": "tr[data-slug=\"acme-events\"] .deactivate a"
+        },
+        {
+          "waitFor": ".block-doctor-warning-row .block-doctor-keep"
+        }
+      ],
+      "include": [
+        ".block-doctor-warning-row"
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Plugins screen step after keeping, with the refused blocks listed",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installEvents",
+          "save": "events"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        }
+      ],
+      "url": "/wp-admin/plugins.php",
+      "steps": [
+        {
+          "click": "tr[data-slug=\"acme-events\"] .deactivate a"
+        },
+        {
+          "click": ".block-doctor-keep"
+        },
+        {
+          "waitFor": ".block-doctor-refused"
+        }
+      ],
+      "include": [
+        ".block-doctor-warning-row"
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Plugins screen notice offering Put the blocks back",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "installEvents",
+          "save": "events"
+        },
+        {
+          "js": "seed.js",
+          "call": "buildUsage"
+        },
+        {
+          "wp": [
+            "block-doctor",
+            "keep",
+            "acme-events",
+            "--user=admin"
+          ]
+        }
+      ],
+      "url": "/wp-admin/plugins.php",
+      "steps": [
+        {
+          "waitFor": ".block-doctor-kept"
+        }
+      ],
+      "include": [
+        ".block-doctor-kept"
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
+    },
+    {
+      "name": "Tools > Block Doctor report with the Hidden view",
+      "setup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        },
+        {
+          "js": "seed.js",
+          "call": "seed",
+          "save": "ids"
+        },
+        {
+          "js": "seed.js",
+          "call": "createPost",
+          "args": [
+            "Hidden bits",
+            "<!-- wp:paragraph {\"metadata\":{\"blockVisibility\":false}} -->\n<p>Never shown</p>\n<!-- /wp:paragraph -->"
+          ]
+        }
+      ],
+      "url": "/wp-admin/tools.php?page=block-doctor",
+      "steps": [
+        {
+          "click": ".bdr-start"
+        },
+        {
+          "waitFor": ".bdr-last-scan"
+        },
+        {
+          "click": ".bdr-tab[data-kind=\"hidden\"]"
+        },
+        {
+          "waitFor": ".bdr-table"
+        }
+      ],
+      "cleanup": [
+        {
+          "js": "seed.js",
+          "call": "reset"
+        }
+      ]
     }
   ],
   "skip": {}

@@ -211,6 +211,56 @@ final class Fixer {
 	}
 
 	/**
+	 * Puts the original markup back into a post where Keeper replaced blocks, a revision first.
+	 *
+	 * Works on the post as it is now, so edits made since stay. Block Doctor's Custom HTML blocks that were edited or removed are not touched.
+	 *
+	 * @param int                   $post_id   Post.
+	 * @param array<string, string> $originals Marker => original markup.
+	 * @param int                   $batch_id  The keep batch, whose undo data is dropped once the post is back.
+	 * @return string '' when put back, or `deleted`, `forbidden`, `locked`, `nothing`, `failed`.
+	 */
+	public function put_back( int $post_id, array $originals, int $batch_id ): string {
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return 'deleted';
+		}
+		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+			return 'forbidden';
+		}
+		if ( $this->editing( $post->ID ) ) {
+			return 'locked';
+		}
+
+		$result = Keeper::restore_markup( (string) $post->post_content, $originals );
+		if ( ! $result['restored'] || $result['content'] === $post->post_content ) {
+			return 'nothing';
+		}
+
+		$this->revision_of_current( $post );
+		$saved = wp_update_post(
+			array(
+				'ID'           => $post->ID,
+				'post_content' => wp_slash( $result['content'] ),
+			),
+			true
+		);
+		if ( is_wp_error( $saved ) ) {
+			return 'failed';
+		}
+
+		$after = get_post( $post->ID );
+		if ( $after ) {
+			$this->scanner->scan_post( $after, array(), md5( $after->post_content ) );
+		}
+		// Markers whose Custom HTML block was removed have nothing to put back, so the record goes.
+		delete_post_meta( $post->ID, Keeper::META );
+		$this->batches->set_undo_data( $post->ID, $batch_id, null );
+
+		return '';
+	}
+
+	/**
 	 * Puts one post back.
 	 *
 	 * @param int $post_id  Post.

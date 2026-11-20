@@ -23,3 +23,31 @@ test( 'other links are left alone', () => {
 	assert.equal( parseLink( 'plugins.php?action=deactivate' ), null );
 	assert.equal( parseLink( 'not a url at all' ), null );
 } );
+
+// The step says what happens to the blocks. Dynamic blocks have no saved HTML, so nothing converts them afterwards.
+const i18n = {
+	__: ( text ) => text,
+	_n: ( one, many, count ) => ( count === 1 ? one : many ),
+	sprintf: ( text, ...values ) => values.reduce( ( out, value, index ) => out.replace( new RegExp( `%${ index + 1 }\\$s|%s` ), String( value ) ), text ),
+};
+const { consequence } = require( '../../assets/js/plugins.js' );
+
+test( 'the step counts the dynamic blocks and says they show nothing once the plugin is off', () => {
+	const text = consequence( 'deactivate', { blocks: 3, posts: 12, can_keep: true }, i18n );
+	assert.match( text, /3 of its block types are dynamic, in 12 posts/ );
+	assert.match( text, /show nothing, and Block Doctor cannot convert them afterwards/ );
+	assert.match( text, /Keep what they show saves their output as HTML first, with Undo/ );
+	assert.doesNotMatch( text, /fix the posts with Block Doctor afterwards/ );
+} );
+
+test( 'a delete says the plugin would have to be installed again, and offers no keep sentence when it cannot keep', () => {
+	const text = consequence( 'delete', { blocks: 1, posts: 1, can_keep: false }, i18n );
+	assert.match( text, /1 of its block types is dynamic, in 1 posts/ );
+	assert.match( text, /install the plugin again/ );
+	assert.doesNotMatch( text, /Keep what they show/ );
+} );
+
+test( 'without dynamic blocks the old promise holds: the posts can be fixed afterwards', () => {
+	assert.match( consequence( 'deactivate', { blocks: 0, posts: 0, can_keep: false }, i18n ), /fix the posts with Block Doctor afterwards/ );
+	assert.match( consequence( 'delete', {}, i18n ), /Deleting removes its files/ );
+} );

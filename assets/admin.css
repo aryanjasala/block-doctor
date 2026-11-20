@@ -38,17 +38,23 @@
 }
 
 .bdr-tabs {
-	margin-bottom: 16px;
+	float: none;
+	margin: 0 0 16px;
+	padding: 0;
 }
 
-/* The filters are buttons, so they need the font and cursor a link would have. */
-.bdr-tabs .nav-tab {
+/* Core's views float left and are links, so they wrap like a sentence at any width. */
+.bdr-tabs li {
+	margin: 0;
+	white-space: nowrap;
+}
+
+.bdr-tabs a {
 	cursor: pointer;
-	font-family: inherit;
 }
 
 .bdr-tabs .bdr-count {
-	margin-left: 4px;
+	margin-left: 2px;
 }
 
 .bdr-fix-options {

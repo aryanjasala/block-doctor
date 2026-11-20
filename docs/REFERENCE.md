@@ -18,6 +18,7 @@ The scan then asks for posts in ID order, 20 at a time, with their raw content. 
 | `pattern-ref` | server | A `core/block` points to a synced pattern that is missing or in the trash |
 | `navigation-ref` | server | A `core/navigation` points to a menu that is missing or in the trash |
 | `missing-media` | server | A `core/image`, `core/cover`, `core/video`, `core/audio`, `core/file` (`id`) or `core/media-text` (`mediaId`) points to a deleted attachment |
+| `hidden` | server | A block hidden with core's block visibility (6.9). Hidden on every screen means WordPress leaves it out of the page. Hidden on some screen sizes is CSS only: its HTML and text still ship to every visitor. Not counted as broken, and not fixable here |
 | `error` | browser and server | The scan hit an error in this post, such as a block type whose attributes make the parser throw, or a server check that threw. The post was not checked, so it is never stored as clean. Not counted as broken |
 
 Each issue has `kind`, `path`, `name`, `message`, `detail` (technical text, or empty), `excerpt` (the block's first words, or empty) and `source`. The screen shows the block's title with its name second, its first words and its position, and groups a post's issues by kind.
@@ -72,6 +73,20 @@ On the Plugins screen, Deactivate and Delete for a plugin whose blocks posts use
 - **WP-CLI** deactivation is never held back. `wp plugin deactivate` prints one warning line, which `block_doctor_cli_deactivation_warning` turns off.
 - **Site Health** has a test, "Blocks of plugins and themes that are off", that lists the posts still using blocks nothing registers any more.
 
+### Keep what the blocks show
+
+A dynamic block (`<!-- wp:acme/events /-->`) has no saved HTML: the plugin's code draws it each time the page loads. Once the plugin is off it shows nothing, and the fixes above cannot convert it, because there is nothing to keep. The step on the Plugins screen says how many of the plugin's block types in use are dynamic, and, while the plugin is on, offers a third button: **Keep what they show, then deactivate** (or **then delete**).
+
+1. Every post that uses one of the plugin's dynamic blocks is visited, 20 at a time. Each block is rendered with `render_block()` in its own post's context, as a visitor, and saved as a Custom HTML block.
+2. The save goes through the same fixer as every other fix: a revision with the exact content first, then one batch (kind `keep`) that **Undo batch** undoes.
+3. A block whose output depends on the visitor is **refused** and left as it is. Each one is listed in the step with the post and the reason. A block is refused when its name has a part such as form, cart, checkout, login, account, order, payment, subscribe or comment (`block_doctor_keep_denylist`), when it renders differently for a visitor and a logged-in user, when two renders in a row differ, when the output has a form, a security token or an Interactivity API directive, when it is empty, or when `block_doctor_keep_refuse` says so. On sites where the person may not post unfiltered HTML, a block whose output core's filter would cut is refused too.
+4. A post the person cannot edit is never read or changed, and never named: the step only counts how many were left alone.
+5. When nothing was refused, the plugin is switched off straight away. Otherwise the step lists what stays dynamic and waits for the person to choose.
+
+Every block that was replaced is kept word for word in the post's `_block_doctor_kept` meta. While the plugin is on, a notice on the Plugins screen and a Site Health test offer **Put the blocks back**: the Custom HTML blocks Block Doctor made are replaced with the exact original block markup, a revision first, in the post as it is now, so edits made since stay. A Custom HTML block that was removed has nothing to put back. Undo batch also works, until the post is edited.
+
+Kept blocks are frozen: they show what they showed then and no longer follow the plugin. Blocks inside a synced pattern are rendered in the pattern's own context. The step is not offered on the network Plugins screen, because content is per site.
+
 ### Who sees what
 
 The tab and its CSV only count and list post types the person may edit other people's posts in (the post type's own `edit_others_posts` capability), and each listed post also needs `edit_post`. An editor never sees titles, counts or edit links for a post type with capabilities of its own. The scan report, its CSV and the `list-issues` ability only list posts the person may edit, as the fixes always did. The server scan started from the screen or the `run-server-scan` ability checks and stores only posts the person may edit (a scan carried on by WP-Cron keeps the starter's rights), and the counts in the summary cover those posts too. WP-CLI has no user, so it checks every post.
@@ -99,6 +114,14 @@ The tab and its CSV only count and list post types the person may edit other peo
 | `block_doctor_deactivation_warning` | filter | `( array $warning, string $key )`. The whole warning for one plugin or theme (`key` such as `plugin:acme/acme.php`): `name`, `blocks`, `block_count`, `posts`, `top`, `url`, `message`. Return an empty array to show none |
 | `block_doctor_orphans_notice` | filter | `( string $text, array $group, string $key )`. The sentence in the notice after a plugin or theme with blocks in use was switched off |
 | `block_doctor_cli_deactivation_warning` | filter | `( bool $warn )`. Whether `wp plugin deactivate` prints a warning line when the plugin's blocks are in use. Default true. It never blocks |
+| `block_doctor_clear_capability` | filter | `( string $capability )`. Who may clear every stored result (Clear results, `DELETE /results`). Default `manage_options` |
+| `block_doctor_keep_denylist` | filter | `( string[] $parts )`. Lower case parts of a block name (split at `/`, `-` and `_`) that always refuse a block when keeping what it shows, such as `form` or `cart` |
+| `block_doctor_keep_refuse` | filter | `( string $reason, string $name, string $html, WP_Post $post )`. Why a dynamic block may not be kept as HTML, '' when it passed. Return a reason to refuse it, or '' to allow it |
+| `block_doctor_kept_notice` | filter | `( string $text, array $run, string $key )`. The sentence in the notice that offers Put the blocks back |
+| `block_doctor_keep_started` | action | `( string $key, array $run )`. A keep run started for a plugin |
+| `block_doctor_keep_finished` | action | `( string $key, array $run )`. A keep run went through every post |
+| `block_doctor_blocks_kept` | action | `( int $post_id, int $batch_id, string[] $names )`. The dynamic blocks of a post were saved as Custom HTML |
+| `block_doctor_blocks_put_back` | action | `( int $post_id, int $batch_id, string $key )`. A post got its original blocks back |
 | `block_doctor_scan_started` | action | `( string $source, array $state )`. A scan started. `$source` is `browser` or `server` |
 | `block_doctor_scan_finished` | action | `( string $source, array $state )`. A scan reached the last post. `$state` has `done`, `total` and `found` (posts with issues) |
 | `block_doctor_issues_found` | action | `( int $post_id, array $issues )`. A post has issues after a scan or a fix. `$issues` is every issue stored for it |
@@ -187,6 +210,8 @@ Invalid markup can only be found and fixed in the browser, so the abilities cove
 | `block-doctor/get-block-usage` | Read-only. Block types with their provider, posts, uses and last use, filtered by `filter` (core, plugin, theme, unregistered, unused), `search` or `provider`. With `block`, or `provider`, the posts that use it, with the position of the block in each. Only post types and posts the user may edit. `ready` is false while the index is still building |
 | `block-doctor/run-usage-index` | Builds the block usage index: the first batch now, the rest with WP-Cron. Not read-only, not destructive, so the REST API runs it with `POST`. Changes no post |
 | `block-doctor/undo-batch` | Destructive. Undoes `batch_id`, up to 100 posts per call; call again while `remaining` is above 0. The REST API runs it with `DELETE` |
+| `block-doctor/keep-blocks` | Destructive, with Undo. `plugin` (plugin file). While the plugin is on, saves each dynamic block as a Custom HTML block through the fixer (revision first, one batch), refuses blocks that depend on the visitor and lists them, and never touches posts the caller cannot edit. Call again while `status` is `running` |
+| `block-doctor/put-blocks-back` | Destructive. `plugin`. Replaces the Custom HTML blocks Block Doctor made with the exact original markup, a revision first. Call again while `remaining` is above 0 |
 
 ## WP-CLI
 
@@ -196,10 +221,12 @@ wp block-doctor report [--kind=<kind>] [--post_type=<type>] [--format=...]
 wp block-doctor usage [--block=<name>] [--provider=<key>] [--filter=<filter>] [--search=<text>] [--reindex] [--format=...]
 wp block-doctor batches [--format=...]
 wp block-doctor undo-batch <id>
+wp block-doctor keep <plugin> [--dry-run]
+wp block-doctor put-back <plugin>
 wp block-doctor clear [--yes]
 ```
 
-`scan` runs the server-side checks on every post and lists what they found. It cannot see invalid markup: that needs the browser scan on Tools > Block Doctor. `report` lists everything stored, from both scans. `usage` lists every block type with its provider, posts and uses, or with `--block` or `--provider` the posts that use it, with the position of the block in each. It builds the block usage index first when it was never built, and `--reindex` counts every post again. `--filter` takes core, plugin, theme, unregistered (used, not registered) or unused (registered, not used). `clear` deletes the stored results and scan progress; batches stay, so they can still be undone.
+`keep` saves what the dynamic blocks of an active plugin show as Custom HTML, a revision first and one batch, and lists the blocks it refused; `--dry-run` only counts. `put-back` restores the original markup. Both need `--user` so each post is checked against what that user may edit. `scan` runs the server-side checks on every post and lists what they found. It cannot see invalid markup: that needs the browser scan on Tools > Block Doctor. `report` lists everything stored, from both scans. `usage` lists every block type with its provider, posts and uses, or with `--block` or `--provider` the posts that use it, with the position of the block in each. It builds the block usage index first when it was never built, and `--reindex` counts every post again. `--filter` takes core, plugin, theme, unregistered (used, not registered) or unused (registered, not used). `clear` deletes the stored results and scan progress; batches stay, so they can still be undone.
 
 ## REST API
 
@@ -209,10 +236,12 @@ The screen uses these routes under `/block-doctor/v1/`, all behind the Block Doc
 | --- | --- |
 | `GET /posts?after=&per_page=` or `?include[]=` | Posts to scan, with raw content and an md5 `hash` |
 | `GET /scan`, `POST /scan` (`action`: start, pause, resume, `sources` with the scripts that registered each block) | Summary and the browser scan's state |
-| `POST /results`, `DELETE /results` | Store one batch of browser results, or clear everything |
+| `POST /results`, `DELETE /results` | Store one batch of browser results, or clear everything (administrators only, `block_doctor_clear_capability`) |
 | `POST /server-scan` | Run the next server batch, starting a scan when none is running |
 | `GET /issues?kind=&post_type=&page=&per_page=` | Report rows, or `ids_only=1` for every matching post ID. Only posts the user may edit |
 | `GET /batches`, `POST /batches` | List batches, or start one |
+| `GET /keep?provider=`, `POST /keep` (`provider`, `restart`) | The dynamic blocks of a plugin and the last keep run, or the next chunk of a run. Call again while `status` is `running` |
+| `POST /keep/put-back` (`provider`) | Put the original blocks back in the next posts. Call again while `remaining` is above 0 |
 | `POST /fix` | Save one fixed post: `post_id`, `batch`, `content`, `hash`, `issues` |
 | `POST /batches/<id>/undo` | Undo the next posts of a batch |
 | `GET /usage?search=&filter=&provider=&page=&per_page=` | Block types for the Block usage tab, with `ready`, `state`, `providers` and `stats` |
@@ -246,6 +275,8 @@ $plugin->fixer()->undo( 3 );                      // undo batch 3
 | `block_doctor_index` option | Which posts have issues of which kind, for counts and the report. Written once per batch of posts, and once per request when posts are deleted |
 | `block_doctor_scan`, `block_doctor_server_scan` options | Progress of the last browser and server scan |
 | `block_doctor_batches` option | Fix batches inside the undo window |
+| `_block_doctor_kept` post meta | Marker => the original markup of each dynamic block kept as Custom HTML in this post, until it is put back |
+| `block_doctor_keep` option | Per plugin: progress of the keep run, what was kept, the refused blocks, and the batches to put back |
 | `block_doctor_js_blocks` option | Block types the browser registered at the last browser scan |
 | `_block_doctor_use_<block name>` post meta | How many times the post uses that block type. One row per post and block type, in the block usage index |
 | `block_doctor_usage_scan` option | Progress of the last block usage index build |

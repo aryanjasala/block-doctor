@@ -272,6 +272,7 @@ final class Page implements Service {
 			),
 			'perPage'        => $this->config->usage_per_page(),
 			'pluginsUrl'     => admin_url( 'plugins.php' ),
+			'canClear'       => $this->config->can_clear(),
 			'usageExport'    => add_query_arg(
 				array(
 					'action'   => self::USAGE_EXPORT,

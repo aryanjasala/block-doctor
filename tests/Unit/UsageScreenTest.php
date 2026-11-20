@@ -69,7 +69,7 @@ final class UsageScreenTest extends PluginTestCase {
 	private function controller(): Controller {
 		$p = $this->plugin();
 
-		return new Controller( $p['config'], $p['posts'], $p['issues'], $p['scanner'], $p['batches'], $p['fixer'], $p['report'], $p['usage'], $p['providers'], $p['deactivation'] );
+		return new Controller( $p['config'], $p['posts'], $p['issues'], $p['scanner'], $p['batches'], $p['fixer'], $p['report'], $p['usage'], $p['providers'], $p['deactivation'], $p['keeper'] );
 	}
 
 	private function abilities(): Abilities {

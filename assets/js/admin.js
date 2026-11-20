@@ -1110,10 +1110,10 @@
 						'span',
 						{ className: 'axle-toolbar__end' },
 						el( 'a', { className: 'button bdr-export', href: addQueryArgs( data.exportUrl, tab ? { kind: tab } : {} ) }, __( 'Download CSV', 'block-doctor' ) ),
-						el( Button, { variant: 'tertiary', isDestructive: true, className: 'bdr-clear', ref: clearButton, 'aria-expanded': confirmClear, onClick: () => setConfirmClear( true ) }, __( 'Clear results', 'block-doctor' ) )
+						data.canClear ? el( Button, { variant: 'tertiary', isDestructive: true, className: 'bdr-clear', ref: clearButton, 'aria-expanded': confirmClear, onClick: () => setConfirmClear( true ) }, __( 'Clear results', 'block-doctor' ) ) : null
 					)
 				),
-				confirmClear
+				confirmClear && data.canClear
 					? el(
 							Confirm,
 							{ id: 'bdr-clear-text', label: __( 'Delete the stored results', 'block-doctor' ), onConfirm: clear, onCancel: () => setConfirmClear( false ), returnFocus: clearButton, busy: clearing },
@@ -1203,27 +1203,32 @@
 			{ className: 'axle-card bdr-panel bdr-report', 'aria-busy': ! report && ! loadError ? 'true' : 'false' },
 			el( 'h2', { className: 'axle-card__title' }, __( 'Report', 'block-doctor' ) ),
 			el(
-				'div',
-				{ className: 'nav-tab-wrapper bdr-tabs', role: 'group', 'aria-label': __( 'Show the posts with one kind of issue', 'block-doctor' ) },
-				[ { key: '', label: __( 'All', 'block-doctor' ) } ].concat( tabs ).map( ( kind ) =>
+				'ul',
+				{ className: 'subsubsub bdr-tabs', 'aria-label': __( 'Show the posts with one kind of issue', 'block-doctor' ) },
+				[ { key: '', label: __( 'All', 'block-doctor' ) } ].concat( tabs ).map( ( kind, index, all ) =>
 					el(
-						'button',
-						{
-							key: kind.key,
-							type: 'button',
-							className: 'nav-tab bdr-tab' + ( tab === kind.key ? ' nav-tab-active is-active' : '' ),
-							'aria-pressed': tab === kind.key,
-							'data-kind': kind.key || 'all',
-							title: kind.description || '',
-							onClick: () => {
-								setTab( kind.key );
-								setPage( 1 );
+						'li',
+						{ key: kind.key },
+						el(
+							'a',
+							{
+								href: '#' + ( kind.key || 'all' ),
+								className: 'bdr-tab' + ( tab === kind.key ? ' current' : '' ),
+								'aria-current': tab === kind.key ? 'page' : undefined,
+								'data-kind': kind.key || 'all',
+								title: kind.description || undefined,
+								onClick: ( event ) => {
+									event.preventDefault();
+									setTab( kind.key );
+									setPage( 1 );
+								},
 							},
-						},
-						kind.label,
-						' ',
-						// Every pill counts posts, like the table below it.
-						el( 'span', { className: 'axle-badge axle-badge--neutral bdr-count' }, kind.key ? counts[ kind.key ].posts : summary.posts )
+							kind.label,
+							' ',
+							// Every view counts posts, like the table below it.
+							el( 'span', { className: 'count bdr-count' }, '(' + ( kind.key ? counts[ kind.key ].posts : summary.posts ) + ')' )
+						),
+						index < all.length - 1 ? ' |' : null
 					)
 				)
 			),

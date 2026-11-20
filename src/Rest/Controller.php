@@ -13,6 +13,7 @@ use AryanX\Axle\BlockDoctor\Config;
 use AryanX\Axle\BlockDoctor\Deactivation;
 use AryanX\Axle\BlockDoctor\Fixer;
 use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Keeper;
 use AryanX\Axle\BlockDoctor\Posts;
 use AryanX\Axle\BlockDoctor\Providers;
 use AryanX\Axle\BlockDoctor\Report;
@@ -103,6 +104,13 @@ final class Controller implements Service {
 	private Deactivation $deactivation;
 
 	/**
+	 * Keeps what a plugin's dynamic blocks show.
+	 *
+	 * @var Keeper
+	 */
+	private Keeper $keeper;
+
+	/**
 	 * Sets up the routes.
 	 *
 	 * @param Config       $config  Defaults and limits.
@@ -115,8 +123,9 @@ final class Controller implements Service {
 	 * @param Usage        $usage        The block usage index.
 	 * @param Providers    $providers    Where each block type comes from.
 	 * @param Deactivation $deactivation Warnings before a plugin is turned off.
+	 * @param Keeper       $keeper       Keeps what a plugin's dynamic blocks show.
 	 */
-	public function __construct( Config $config, Posts $posts, Issues $issues, Scanner $scanner, Batches $batches, Fixer $fixer, Report $report, Usage $usage, Providers $providers, Deactivation $deactivation ) {
+	public function __construct( Config $config, Posts $posts, Issues $issues, Scanner $scanner, Batches $batches, Fixer $fixer, Report $report, Usage $usage, Providers $providers, Deactivation $deactivation, Keeper $keeper ) {
 		$this->config       = $config;
 		$this->posts        = $posts;
 		$this->issues       = $issues;
@@ -127,6 +136,7 @@ final class Controller implements Service {
 		$this->usage        = $usage;
 		$this->providers    = $providers;
 		$this->deactivation = $deactivation;
+		$this->keeper       = $keeper;
 	}
 
 	/**
@@ -231,7 +241,8 @@ final class Controller implements Service {
 				array(
 					'methods'             => \WP_REST_Server::DELETABLE,
 					'callback'            => array( $this, 'clear_results' ),
-					'permission_callback' => $allowed,
+					// Clearing wipes the whole site's results, so it needs more than the capability for the screen.
+					'permission_callback' => array( $this->config, 'can_clear' ),
 				),
 			)
 		);
@@ -354,6 +365,7 @@ final class Controller implements Service {
 		);
 
 		$this->usage_routes( $allowed );
+		$this->keep_routes( $allowed );
 
 		register_rest_route(
 			self::NAMESPACE,
@@ -370,6 +382,97 @@ final class Controller implements Service {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Registers the routes that keep what a plugin's dynamic blocks show.
+	 *
+	 * @param callable $allowed Permission callback.
+	 */
+	private function keep_routes( callable $allowed ): void {
+		$provider = array(
+			'type'              => 'string',
+			'required'          => true,
+			'sanitize_callback' => 'sanitize_text_field',
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/keep',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_keep' ),
+					'permission_callback' => $allowed,
+					'args'                => array( 'provider' => $provider ),
+				),
+				array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'keep' ),
+					'permission_callback' => $allowed,
+					'args'                => array(
+						'provider' => $provider,
+						'restart'  => array(
+							'type'    => 'boolean',
+							'default' => false,
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/keep/put-back',
+			array(
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'put_back' ),
+				'permission_callback' => $allowed,
+				'args'                => array( 'provider' => $provider ),
+			)
+		);
+	}
+
+	/**
+	 * GET /keep: the dynamic blocks of a plugin and the last keep run.
+	 *
+	 * @param \WP_REST_Request $request Request.
+	 * @return \WP_REST_Response
+	 */
+	public function get_keep( $request ) {
+		$key = (string) $request->get_param( 'provider' );
+		$run = $this->keeper->run( $key );
+
+		return rest_ensure_response(
+			array(
+				'summary' => $this->keeper->summary( $key ),
+				'run'     => $run ? $this->keeper->report( $run ) : (object) array(),
+			)
+		);
+	}
+
+	/**
+	 * POST /keep: keeps the next posts' dynamic blocks as Custom HTML. Call again while `status` is `running`.
+	 *
+	 * @param \WP_REST_Request $request Request.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function keep( $request ) {
+		$result = $this->keeper->step( (string) $request->get_param( 'provider' ), (bool) $request->get_param( 'restart' ) );
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
+	/**
+	 * POST /keep/put-back: puts the original blocks back in the next posts. Call again while `remaining` is above 0.
+	 *
+	 * @param \WP_REST_Request $request Request.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function put_back( $request ) {
+		$result = $this->keeper->put_back( (string) $request->get_param( 'provider' ), $this->config->batch_size() );
+
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
 
 	/**
@@ -783,6 +886,10 @@ final class Controller implements Service {
 			return rest_ensure_response( array( 'warning' => (object) array() ) );
 		}
 		$warning = $this->deactivation->warning( $key, $this->usage->visible_types() );
+		if ( $warning ) {
+			// How many of its blocks are dynamic, and whether they can be kept now. The step says what happens to them.
+			$warning['dynamic'] = $this->keeper->summary( $key, wp_list_pluck( $warning['blocks'], 'name' ) );
+		}
 
 		return rest_ensure_response( array( 'warning' => $warning ? $warning : (object) array() ) );
 	}

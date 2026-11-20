@@ -14,6 +14,7 @@ use AryanX\Axle\BlockDoctor\Config;
 use AryanX\Axle\BlockDoctor\Deactivation;
 use AryanX\Axle\BlockDoctor\Fixer;
 use AryanX\Axle\BlockDoctor\Issues;
+use AryanX\Axle\BlockDoctor\Keeper;
 use AryanX\Axle\BlockDoctor\Posts;
 use AryanX\Axle\BlockDoctor\Providers;
 use AryanX\Axle\BlockDoctor\Report;
@@ -327,7 +328,7 @@ abstract class PluginTestCase extends TestCase {
 	/**
 	 * The plugin's objects, wired like Plugin does.
 	 *
-	 * @return array{config: Config, posts: Posts, issues: Issues, checks: Checks, scanner: Scanner, batches: Batches, fixer: Fixer, report: Report, providers: Providers, usage: Usage, deactivation: Deactivation}
+	 * @return array{config: Config, posts: Posts, issues: Issues, checks: Checks, scanner: Scanner, batches: Batches, fixer: Fixer, report: Report, providers: Providers, usage: Usage, deactivation: Deactivation, keeper: Keeper}
 	 */
 	protected function plugin(): array {
 		$config  = new Config();
@@ -340,6 +341,7 @@ abstract class PluginTestCase extends TestCase {
 		$providers    = new Providers();
 		$usage        = new Usage( $config, $posts, $providers );
 		$deactivation = new Deactivation( $config, $usage, $providers );
+		$fixer        = new Fixer( $posts, $issues, $batches, $scanner );
 
 		return array(
 			'config'  => $config,
@@ -348,12 +350,13 @@ abstract class PluginTestCase extends TestCase {
 			'checks'  => $checks,
 			'scanner' => $scanner,
 			'batches' => $batches,
-			'fixer'   => new Fixer( $posts, $issues, $batches, $scanner ),
+			'fixer'   => $fixer,
 			'report'  => new Report( $config, $issues, $scanner ),
 
 			'providers'    => $providers,
 			'usage'        => $usage,
 			'deactivation' => $deactivation,
+			'keeper'       => new Keeper( $config, $posts, $providers, $batches, $fixer ),
 		);
 	}
 }

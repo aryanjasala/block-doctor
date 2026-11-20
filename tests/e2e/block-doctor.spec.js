@@ -59,15 +59,15 @@ test.describe.serial( 'Block Doctor', () => {
 
 		// On screen: one filter per kind with how many posts have it.
 		const tab = ( kind ) => page.locator( `.bdr-tab[data-kind="${ kind }"] .bdr-count` );
-		await expect( tab( 'all' ) ).toHaveText( '9' );
-		await expect( tab( 'invalid' ) ).toHaveText( '4' );
-		await expect( tab( 'missing' ) ).toHaveText( '1' );
-		await expect( tab( 'classic' ) ).toHaveText( '1' );
-		await expect( tab( 'deprecated' ) ).toHaveText( '1' );
-		await expect( tab( 'empty' ) ).toHaveText( '1' );
-		await expect( tab( 'pattern-ref' ) ).toHaveText( '1' );
-		await expect( tab( 'navigation-ref' ) ).toHaveText( '1' );
-		await expect( tab( 'missing-media' ) ).toHaveText( '1' );
+		await expect( tab( 'all' ) ).toHaveText( '(9)' );
+		await expect( tab( 'invalid' ) ).toHaveText( '(4)' );
+		await expect( tab( 'missing' ) ).toHaveText( '(1)' );
+		await expect( tab( 'classic' ) ).toHaveText( '(1)' );
+		await expect( tab( 'deprecated' ) ).toHaveText( '(1)' );
+		await expect( tab( 'empty' ) ).toHaveText( '(1)' );
+		await expect( tab( 'pattern-ref' ) ).toHaveText( '(1)' );
+		await expect( tab( 'navigation-ref' ) ).toHaveText( '(1)' );
+		await expect( tab( 'missing-media' ) ).toHaveText( '(1)' );
 		await expect( row( page, ids.hours ) ).toContainText( 'The saved markup no longer matches what the block produces.' );
 		await expect( row( page, ids.hours ).locator( '.bdr-detail-text' ).first() ).toHaveText( 'Expected tag name h3, instead saw h2.' );
 		await expect( row( page, ids.order ) ).toContainText( 'Block type acme/widget is not registered.' );
@@ -417,7 +417,7 @@ test.describe.serial( 'Block Doctor', () => {
 		// Registered in PHP with no editor script: never unregistered.
 		expect( issues( clock ) ).toEqual( [] );
 		expect( issues( ids.order ) ).toEqual( [ 'missing@1' ], 'a block nothing registers is still reported' );
-		await expect( page.locator( '.bdr-tab[data-kind="missing"] .bdr-count' ) ).toHaveText( '1' );
+		await expect( page.locator( '.bdr-tab[data-kind="missing"] .bdr-count' ) ).toHaveText( '(1)' );
 	} );
 
 	test( 'Convert to Custom HTML never empties a dynamic block, and says why it stays', async ( { page } ) => {
@@ -537,15 +537,15 @@ test.describe.serial( 'Block Doctor', () => {
 		await expect( group.locator( '.bdr-group-more summary' ) ).toHaveText( 'Show all 5' );
 		await expect( group.locator( '.bdr-issue' ).first() ).toBeHidden();
 
-		// Filter buttons, not tabs, each counting posts.
-		await expect( page.locator( '.bdr-tabs' ) ).toHaveAttribute( 'role', 'group' );
+		// Core views (like Posts: All | Published), each counting posts. Links with aria-current, not tabs or buttons.
+		await expect( page.locator( 'ul.subsubsub.bdr-tabs' ) ).toBeVisible();
 		await expect( page.locator( '[role="tab"], [role="tablist"]' ) ).toHaveCount( 0 );
 		const invalid = page.locator( '.bdr-tab[data-kind="invalid"]' );
-		await expect( invalid ).toHaveAttribute( 'aria-pressed', 'false' );
-		await expect( invalid.locator( '.bdr-count' ) ).toHaveText( '5' );
+		await expect( invalid ).not.toHaveAttribute( 'aria-current', 'page' );
+		await expect( invalid.locator( '.bdr-count' ) ).toHaveText( '(5)' );
 		await invalid.click();
-		await expect( invalid ).toHaveAttribute( 'aria-pressed', 'true' );
-		await expect( page.locator( '.bdr-tab[data-kind="all"]' ) ).toHaveAttribute( 'aria-pressed', 'false' );
+		await expect( invalid ).toHaveAttribute( 'aria-current', 'page' );
+		await expect( page.locator( '.bdr-tab[data-kind="all"]' ) ).not.toHaveAttribute( 'aria-current', 'page' );
 		await expect( page.locator( '.bdr-kind-description' ) ).toContainText( '6 blocks in 5 posts.' );
 
 		// Sentence case, like the rest of wp-admin.

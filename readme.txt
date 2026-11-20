@@ -21,6 +21,7 @@ After a migration, a block plugin update or a plugin removal, posts open with "T
 * **Classic content**: HTML outside blocks, or a whole classic post.
 * **Outdated blocks**: saved by an older version of the block. They still work, and change the next time the post is saved.
 * **Broken references**: synced patterns, navigation menus and media that were deleted, and posts that are empty now but had blocks in an earlier revision.
+* **Hidden blocks**: blocks hidden with block visibility. Hidden on every screen, WordPress leaves them out of the page. Hidden on some screen sizes is CSS only, so the text still ships in the HTML.
 
 It scans posts, pages and every other post type that uses the block editor, plus synced patterns, templates and template parts saved in the database.
 
@@ -47,6 +48,10 @@ The **Block usage** tab on the same screen lists every block type on the site: w
 
 Deactivate or Delete a plugin that provides blocks, and Block Doctor shows a step first on the Plugins screen: "Its 3 block types are used in 212 posts", with the most affected posts and a link to the full list. You continue or cancel. Nothing is ever blocked, and WP-CLI only prints a warning line. After a bulk deactivate or a theme switch, a notice and a Site Health check link to the posts that lost their blocks, so you can fix them with the tools above.
 
+= Keep what a plugin's dynamic blocks show =
+
+A dynamic block has no saved HTML: the plugin's code draws it every time the page loads. Switch the plugin off and the block shows nothing, and no tool can convert it afterwards. So the step says how many of the plugin's block types in use are dynamic, and, while the plugin is on, offers **Keep what they show, then deactivate**. Each dynamic block is rendered in its own post and saved as a Custom HTML block, with a revision first and one batch that Undo batch undoes. Blocks that show different things to different visitors (forms, carts, security tokens, anything that changes for a logged-in user) are refused, left as they are and listed with the reason. Posts you cannot edit are never touched. Turn the plugin back on and a notice offers **Put the blocks back**: the exact original block markup returns, and edits made since stay.
+
 The counts come from an index that builds itself in the background the first time, and stays current as posts are saved.
 
 Free and open source under the GPL. No pro version, no upsells, no ads in wp-admin, no tracking. And it stays that way.
@@ -54,8 +59,8 @@ Free and open source under the GPL. No pro version, no upsells, no ads in wp-adm
 = For developers and AI agents =
 
 * Filters for every default, limit and list, and actions when a scan starts and finishes, issues are found, a post is fixed and a batch is undone. JavaScript filters and actions too, to skip posts or repair a block your own way. See the reference on GitHub.
-* WP-CLI: `wp block-doctor scan`, `report`, `usage`, `batches`, `undo-batch` and `clear`.
-* On WordPress 6.9 and later, abilities let AI agents read the results and the block usage, run the server-side scan and undo a batch.
+* WP-CLI: `wp block-doctor scan`, `report`, `usage`, `batches`, `undo-batch`, `keep`, `put-back` and `clear`.
+* On WordPress 6.9 and later, abilities let AI agents read the results and the block usage, run the server-side scan, undo a batch, and keep or put back a plugin's dynamic blocks.
 * A CSV download of every issue, a dashboard widget with the counts, and a Site Health check that says how many posts have broken blocks.
 
 == Frequently Asked Questions ==
@@ -95,7 +100,8 @@ No. It stores the issues of each post and a count of the block types it uses in 
 3. A scan in progress, with how many posts are left and about how long it takes.
 4. Fix batches, each with Undo batch.
 5. The Block usage tab: every block type, who provides it, and the posts that use it, with the position of the block in each.
-6. The step on the Plugins screen before a plugin whose blocks posts use is switched off.
+6. The step on the Plugins screen before a plugin whose blocks posts use is switched off: how many of its blocks are dynamic, and a button that keeps what they show first.
+7. After keeping: what was saved as HTML, with Undo batch, and the blocks that were refused because they depend on the visitor.
 
 == Changelog ==
 

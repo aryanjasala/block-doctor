@@ -14,11 +14,11 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
  * Removes Block Doctor data from the current site.
  */
 function block_doctor_uninstall_site(): void {
-	foreach ( array( 'block_doctor_index', 'block_doctor_scan', 'block_doctor_server_scan', 'block_doctor_batches', 'block_doctor_js_blocks', 'block_doctor_usage_scan', 'block_doctor_providers', 'block_doctor_js_sources', 'block_doctor_affected' ) as $block_doctor_option ) {
+	foreach ( array( 'block_doctor_index', 'block_doctor_scan', 'block_doctor_server_scan', 'block_doctor_batches', 'block_doctor_js_blocks', 'block_doctor_usage_scan', 'block_doctor_providers', 'block_doctor_js_sources', 'block_doctor_affected', 'block_doctor_keep' ) as $block_doctor_option ) {
 		delete_option( $block_doctor_option );
 	}
 
-	foreach ( array( '_block_doctor_issues', '_block_doctor_undo' ) as $block_doctor_key ) {
+	foreach ( array( '_block_doctor_issues', '_block_doctor_undo', '_block_doctor_kept' ) as $block_doctor_key ) {
 		delete_post_meta_by_key( $block_doctor_key );
 	}
 

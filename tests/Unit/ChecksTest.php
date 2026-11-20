@@ -114,12 +114,32 @@ final class ChecksTest extends PluginTestCase {
 		$this->assertSame( 'Attachment #32 was deleted from the Media Library. The block may still show a copy of the file, or a broken one.', $issues[1]['message'] );
 	}
 
+	public function test_hidden_blocks_say_whether_wordpress_leaves_them_out_or_css_only_hides_them(): void {
+		$post   = $this->add_post( '<!-- wp:paragraph {"metadata":{"blockVisibility":false}} /-->' );
+		$issues = ( new Checks() )->check_hidden(
+			$post,
+			array(
+				self::block( 'core/paragraph', array( 'metadata' => array( 'blockVisibility' => false ) ) ),
+				self::block( 'core/group', array( 'metadata' => array( 'blockVisibility' => array( 'viewport' => array( 'mobile' => false, 'tablet' => false, 'desktop' => true ) ) ) ), array( self::block( 'core/paragraph', array( 'metadata' => array( 'blockVisibility' => false ) ) ) ) ),
+				self::block( 'core/image', array( 'metadata' => array( 'blockVisibility' => array( 'viewport' => array( 'desktop' => true ) ) ) ) ),
+				self::block( 'core/heading' ),
+			)
+		);
+
+		$this->assertSame( array( 'core/paragraph', 'core/group' ), array_column( $issues, 'name' ), 'what is inside a hidden block is hidden with it, not listed again' );
+		$this->assertStringContainsString( 'Hidden on every screen', $issues[0]['message'] );
+		$this->assertStringContainsString( 'Hidden on mobile, tablet with CSS only', $issues[1]['message'] );
+		$this->assertSame( array( 1 ), $issues[1]['path'] );
+
+		$this->assertSame( array(), ( new Checks() )->check_hidden( $this->add_post( '<!-- wp:paragraph /-->' ), array( self::block( 'core/paragraph' ) ) ), 'posts without the setting are not walked' );
+	}
+
 	public function test_the_checks_filter_adds_and_removes_checks_and_a_broken_one_is_reported_not_hidden(): void {
 		$post = $this->add_post( 'content' );
 		Functions\when( 'parse_blocks' )->justReturn( array( self::block( 'core/paragraph' ) ) );
 		Filters\expectApplied( 'block_doctor_server_checks' )->once()->andReturnUsing(
 			function ( array $checks ) use ( $post ) {
-				$this->assertSame( array( 'missing', 'classic', 'empty', 'pattern-ref', 'navigation-ref', 'missing-media' ), array_keys( $checks ) );
+				$this->assertSame( array( 'missing', 'classic', 'empty', 'pattern-ref', 'navigation-ref', 'missing-media', 'hidden' ), array_keys( $checks ) );
 				return array(
 					'shortcodes' => static function ( $given, $blocks ) use ( $post ) {
 						return $given === $post && 1 === count( $blocks ) ? array( array( 'kind' => 'shortcode', 'path' => array( 0 ) ), 'junk' ) : array();

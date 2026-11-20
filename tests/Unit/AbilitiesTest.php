@@ -49,11 +49,11 @@ final class AbilitiesTest extends PluginTestCase {
 		return $abilities;
 	}
 
-	public function test_four_public_abilities_with_the_right_annotations(): void {
+	public function test_eight_public_abilities_with_the_right_annotations(): void {
 		$abilities = $this->abilities();
 
 		$this->assertNotFalse( has_action( 'wp_abilities_api_init', array( $abilities, 'register_abilities' ) ) );
-		$this->assertSame( array( 'block-doctor/get-scan-summary', 'block-doctor/list-issues', 'block-doctor/run-server-scan', 'block-doctor/get-block-usage', 'block-doctor/run-usage-index', 'block-doctor/undo-batch' ), array_keys( $this->abilities ) );
+		$this->assertSame( array( 'block-doctor/get-scan-summary', 'block-doctor/list-issues', 'block-doctor/run-server-scan', 'block-doctor/get-block-usage', 'block-doctor/run-usage-index', 'block-doctor/undo-batch', 'block-doctor/keep-blocks', 'block-doctor/put-blocks-back' ), array_keys( $this->abilities ) );
 
 		$annotations = array_map(
 			static function ( $ability ) {
@@ -65,6 +65,8 @@ final class AbilitiesTest extends PluginTestCase {
 		$this->assertTrue( $annotations['block-doctor/list-issues']['readonly'] );
 		$this->assertSame( array( 'readonly' => false, 'destructive' => false, 'idempotent' => true ), $annotations['block-doctor/run-server-scan'] );
 		$this->assertSame( array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ), $annotations['block-doctor/undo-batch'] );
+		$this->assertSame( array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ), $annotations['block-doctor/keep-blocks'] );
+		$this->assertSame( array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ), $annotations['block-doctor/put-blocks-back'] );
 
 		foreach ( $this->abilities as $ability ) {
 			$this->assertTrue( $ability['meta']['public'] );

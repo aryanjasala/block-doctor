@@ -77,6 +77,13 @@ final class Abilities implements Service {
 	private Providers $providers;
 
 	/**
+	 * Keeps what a plugin's dynamic blocks show.
+	 *
+	 * @var Keeper|null
+	 */
+	private ?Keeper $keeper;
+
+	/**
 	 * Sets up the abilities.
 	 *
 	 * @param Config    $config    Defaults and limits.
@@ -87,8 +94,9 @@ final class Abilities implements Service {
 	 * @param Report    $report    The report.
 	 * @param Usage     $usage     The block usage index.
 	 * @param Providers $providers Where each block type comes from.
+	 * @param Keeper    $keeper    Keeps what a plugin's dynamic blocks show.
 	 */
-	public function __construct( Config $config, Posts $posts, Issues $issues, Scanner $scanner, Fixer $fixer, Report $report, Usage $usage, Providers $providers ) {
+	public function __construct( Config $config, Posts $posts, Issues $issues, Scanner $scanner, Fixer $fixer, Report $report, Usage $usage, Providers $providers, ?Keeper $keeper = null ) {
 		$this->config    = $config;
 		$this->posts     = $posts;
 		$this->issues    = $issues;
@@ -97,6 +105,7 @@ final class Abilities implements Service {
 		$this->report    = $report;
 		$this->usage     = $usage;
 		$this->providers = $providers;
+		$this->keeper    = $keeper;
 	}
 
 	/**
@@ -462,6 +471,103 @@ final class Abilities implements Service {
 				'idempotent'  => true,
 			)
 		);
+
+		$plugin = array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'plugin' => array(
+					'type'        => 'string',
+					'description' => 'Plugin file, such as acme-events/acme-events.php.',
+				),
+			),
+			'required'             => array( 'plugin' ),
+			'additionalProperties' => false,
+		);
+		$this->ability(
+			'keep-blocks',
+			__( 'Keep what a plugin\'s dynamic blocks show', 'block-doctor' ),
+			__( 'While the plugin is still on, renders each of its dynamic blocks in its post and saves the output as a Custom HTML block, a revision first, as one batch that Undo batch undoes. Blocks whose output depends on the visitor (forms, carts, security tokens, user-specific output) are refused and listed. Posts the caller cannot edit are never touched. Call again while status is running.', 'block-doctor' ),
+			$plugin,
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'status'     => array(
+						'type' => 'string',
+						'enum' => array( 'running', 'done' ),
+					),
+					'total'      => array( 'type' => 'integer' ),
+					'done'       => array( 'type' => 'integer' ),
+					'kept'       => array( 'type' => 'integer' ),
+					'kept_posts' => array( 'type' => 'integer' ),
+					'batch'      => array( 'type' => 'integer' ),
+					'refused_n'  => array( 'type' => 'integer' ),
+					'refused'    => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'object' ),
+					),
+				),
+			),
+			array( $this, 'keep_blocks' ),
+			array(
+				'readonly'    => false,
+				'destructive' => true,
+				'idempotent'  => true,
+			)
+		);
+		$this->ability(
+			'put-blocks-back',
+			__( 'Put the kept blocks back', 'block-doctor' ),
+			__( 'Replaces the Custom HTML blocks Block Doctor made with the exact original block markup, in the post as it is now, a revision first. Call again while remaining is above 0.', 'block-doctor' ),
+			$plugin,
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'restored'  => array( 'type' => 'integer' ),
+					'skipped'   => array(
+						'type'                 => 'object',
+						'additionalProperties' => array( 'type' => 'string' ),
+					),
+					'remaining' => array( 'type' => 'integer' ),
+				),
+			),
+			array( $this, 'put_blocks_back' ),
+			array(
+				'readonly'    => false,
+				'destructive' => true,
+				'idempotent'  => true,
+			)
+		);
+	}
+
+	/**
+	 * Ability: keep what a plugin's dynamic blocks show.
+	 *
+	 * @param array|null $input Ability input.
+	 * @return array|\WP_Error
+	 */
+	public function keep_blocks( $input = null ) {
+		$keeper = $this->keeper ?? Plugin::instance()->keeper();
+		$input  = (array) $input;
+
+		return $keeper->step( 'plugin:' . sanitize_text_field( (string) ( $input['plugin'] ?? '' ) ) );
+	}
+
+	/**
+	 * Ability: put the kept blocks back.
+	 *
+	 * @param array|null $input Ability input.
+	 * @return array|\WP_Error
+	 */
+	public function put_blocks_back( $input = null ) {
+		$keeper = $this->keeper ?? Plugin::instance()->keeper();
+		$input  = (array) $input;
+		$result = $keeper->put_back( 'plugin:' . sanitize_text_field( (string) ( $input['plugin'] ?? '' ) ), $this->config->batch_size() * 5 );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		$result['skipped'] = (object) $result['skipped'];
+
+		return $result;
 	}
 
 	/**

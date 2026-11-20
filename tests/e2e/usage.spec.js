@@ -155,7 +155,7 @@ test.describe.serial( 'Block usage', () => {
 
 		const step = page.locator( '.block-doctor-warning-row .axle-confirm' );
 		await expect( step ).toContainText( 'Acme Gallery provides blocks that posts use. Its 2 block types are used in 4 posts.' );
-		await expect( step ).toBeFocused();
+		await expect( step.getByRole( 'button', { name: 'Cancel' } ) ).toBeFocused();
 		await expect( step.locator( '.block-doctor-top-posts li' ).first() ).toContainText( 'Gallery page' );
 		await expect( step.locator( '.block-doctor-all-posts' ) ).toHaveAttribute( 'href', /tab=usage&provider=plugin%3Aacme-gallery%2Facme-gallery.php/ );
 

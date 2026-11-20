@@ -64,6 +64,7 @@ final class Checks {
 			'pattern-ref'    => array( $this, 'check_patterns' ),
 			'navigation-ref' => array( $this, 'check_navigation' ),
 			'missing-media'  => array( $this, 'check_media' ),
+			'hidden'         => array( $this, 'check_hidden' ),
 		);
 
 		/**
@@ -297,6 +298,61 @@ final class Checks {
 				'message' => sprintf( __( 'Attachment #%d was deleted from the Media Library. The block may still show a copy of the file, or a broken one.', 'block-doctor' ), $id ),
 			);
 		}
+
+		return $issues;
+	}
+
+	/**
+	 * Blocks hidden with core's block visibility (WordPress 6.9): `metadata.blockVisibility`.
+	 *
+	 * `false` hides the block everywhere and WordPress leaves it out of the page. A list of screen sizes hides it with CSS
+	 * only, so its HTML and text still reach every visitor and search engine.
+	 *
+	 * @param \WP_Post $post   Post.
+	 * @param array    $blocks Parsed blocks.
+	 * @return array[]
+	 */
+	public function check_hidden( \WP_Post $post, array $blocks ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Every check gets the same arguments.
+		if ( false === strpos( $post->post_content, 'blockVisibility' ) ) {
+			return array();
+		}
+
+		$issues = array();
+		self::walk(
+			$blocks,
+			static function ( array $block, array $path ) use ( &$issues ): bool {
+				$visibility = $block['attrs']['metadata']['blockVisibility'] ?? null;
+				if ( null === $visibility ) {
+					return true;
+				}
+
+				$sizes = array();
+				if ( is_array( $visibility ) && isset( $visibility['viewport'] ) && is_array( $visibility['viewport'] ) ) {
+					foreach ( $visibility['viewport'] as $size => $shown ) {
+						if ( false === $shown ) {
+							$sizes[] = sanitize_key( (string) $size );
+						}
+					}
+				}
+				if ( false !== $visibility && ! $sizes ) {
+					return true;
+				}
+
+				$issues[] = array(
+					'kind'    => 'hidden',
+					'path'    => $path,
+					'name'    => (string) $block['blockName'],
+					'excerpt' => self::excerpt( (string) $block['innerHTML'] ),
+					'message' => false === $visibility
+						? __( 'Hidden on every screen. WordPress leaves the block out of the page, so visitors never receive its HTML.', 'block-doctor' )
+						/* translators: %s: screen sizes, such as mobile, tablet. */
+						: sprintf( __( 'Hidden on %s with CSS only. The text is still in the page HTML, so search engines and anyone who reads the source see it.', 'block-doctor' ), implode( ', ', $sizes ) ),
+				);
+
+				// What is inside is hidden with it.
+				return false;
+			}
+		);
 
 		return $issues;
 	}

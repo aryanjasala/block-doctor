@@ -28,6 +28,24 @@ if ( ! class_exists( 'BD_Test_Post' ) ) {
 	}
 }
 
+if ( ! class_exists( 'BD_Test_Block_Type' ) ) {
+	/**
+	 * A registered block type: its properties, and whether it renders on the server.
+	 */
+	#[\AllowDynamicProperties]
+	class BD_Test_Block_Type {
+		public function __construct( array $props ) {
+			foreach ( $props as $key => $value ) {
+				$this->$key = $value;
+			}
+		}
+
+		public function is_dynamic() {
+			return is_callable( $this->render_callback ?? null );
+		}
+	}
+}
+
 if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
 	/**
 	 * The block type registry, with the names a test registers.
@@ -60,7 +78,7 @@ if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
 		public function get_all_registered() {
 			$types = array();
 			foreach ( self::$names as $name ) {
-				$types[ $name ] = (object) array_merge(
+				$types[ $name ] = new BD_Test_Block_Type( array_merge(
 					array(
 						'name'                  => $name,
 						'title'                 => '',
@@ -70,7 +88,7 @@ if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
 						'render_callback'       => null,
 					),
 					self::$props[ $name ] ?? array()
-				);
+				) );
 			}
 			return $types;
 		}

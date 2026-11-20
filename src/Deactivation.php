@@ -263,7 +263,16 @@ final class Deactivation implements Service {
 			$this->unaffect( 'theme:' . $new_theme->get_template() );
 		}
 		if ( $old_theme instanceof \WP_Theme ) {
-			$this->affect( 'theme', 'theme:' . $old_theme->get_stylesheet() );
+			// A child theme and its parent both provide blocks, keyed by their own folder. Whatever is still active is not affected.
+			$still = array();
+			if ( $new_theme instanceof \WP_Theme ) {
+				$still = array( $new_theme->get_stylesheet(), $new_theme->get_template() );
+			}
+			foreach ( array_unique( array( $old_theme->get_stylesheet(), $old_theme->get_template() ) ) as $folder ) {
+				if ( ! in_array( $folder, $still, true ) ) {
+					$this->affect( 'theme', 'theme:' . $folder );
+				}
+			}
 		}
 	}
 
@@ -425,7 +434,18 @@ final class Deactivation implements Service {
 		AxleUi::enqueue();
 		wp_enqueue_style( 'block-doctor-plugins', $url . 'plugins.css', array( AxleUi::HANDLE ), VERSION );
 		wp_enqueue_script( 'block-doctor-plugins', $url . 'js/plugins.js', array( 'wp-api-fetch', 'wp-a11y', 'wp-hooks', 'wp-i18n' ), VERSION, true );
-		wp_add_inline_script( 'block-doctor-plugins', 'window.blockDoctorPlugins = ' . wp_json_encode( array( 'plugins' => (object) $plugins ) ) . ';', 'before' );
+		wp_add_inline_script(
+			'block-doctor-plugins',
+			'window.blockDoctorPlugins = ' . wp_json_encode(
+				array(
+					'plugins' => (object) $plugins,
+					// Content is kept per site, so the network screen cannot offer it.
+					'keep'    => ! is_network_admin(),
+					'undoUrl' => Page::url(),
+				)
+			) . ';',
+			'before' 
+		);
 		wp_set_script_translations( 'block-doctor-plugins', 'block-doctor' );
 	}
 }
