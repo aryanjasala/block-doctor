@@ -22,3 +22,27 @@
 .block-doctor-warning-row .axle-confirm a {
 	text-decoration: underline;
 }
+
+/* Older cores lay the plugins table out as a block on phones, and the step's cell kept its table width. */
+@media screen and (max-width: 782px) {
+	.block-doctor-warning-row,
+	.block-doctor-warning-row td {
+		box-sizing: border-box;
+		display: block;
+		max-width: 100%;
+		width: 100%;
+	}
+
+	.block-doctor-warning-row td {
+		padding: 0 12px 12px;
+	}
+
+	.block-doctor-warning-row .axle-confirm {
+		max-width: 100%;
+		overflow-wrap: anywhere;
+	}
+
+	.block-doctor-warning-row .axle-actions .button {
+		white-space: normal;
+	}
+}
